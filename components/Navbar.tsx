@@ -43,10 +43,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-                MedAssist <span className="text-teal-400 font-extrabold">AI</span>
+                Rapi<span className="text-teal-400 font-extrabold">Cure</span>
               </h1>
               <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/20">
-                Pre-OPD Scribe
+                Pre-OPD Scribe & AI Triage
               </span>
             </div>
             <p className="text-[11px] text-slate-400 hidden md:flex items-center gap-1.5">

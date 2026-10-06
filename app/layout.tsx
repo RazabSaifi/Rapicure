@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MedAssist AI | Pre-OPD Smart Triage & Scribe (AIIMS Jodhpur)",
+  title: "RapiCure | Pre-OPD Smart Triage & Voice Scribe (AIIMS Jodhpur)",
   description:
     "Pre-consultation vernacular medical scribe & smart triage system powered by Gemini 2.0 Flash for Indian OPDs.",
 };

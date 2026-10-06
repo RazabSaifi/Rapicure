@@ -32,7 +32,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({ triageResult }) =>
           Outpatient Department (OPD) • General Medicine & Triage Unit
         </p>
         <p className="text-[10px] text-gray-500 mt-0.5">
-          AAYU 2026 AI Innovation • Powered by MedAssist AI Pre-Consultation Scribe
+          AAYU 2026 AI Innovation • Powered by RapiCure AI Pre-Consultation Scribe
         </p>
       </div>
 
@@ -158,7 +158,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({ triageResult }) =>
 
         <div className="flex justify-between items-end mt-6 pt-4 text-xs font-bold">
           <div>
-            <p>Triage Scribe: MedAssist AI v2.0</p>
+            <p>Triage Scribe: RapiCure AI v2.0</p>
             <p className="text-[10px] text-gray-500 font-normal">
               Verified by Triage Nurse Station
             </p>

@@ -24,7 +24,7 @@ interface VoiceConversationStudioProps {
   selectedLang: "hi-IN" | "en-IN";
   patientInfo: PatientInfo;
   vitals: VitalsData;
-  conversationHistory: ChatMessage[];
+  conversationHistory?: ChatMessage[];
   onUpdateHistory: (history: ChatMessage[]) => void;
   onFinishConsultation: (narrativeText: string) => void;
   isLoadingSOAP: boolean;
@@ -51,7 +51,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   selectedLang,
   patientInfo,
   vitals,
-  conversationHistory,
+  conversationHistory = [],
   onUpdateHistory,
   onFinishConsultation,
   isLoadingSOAP,
@@ -69,6 +69,8 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const speechOutputRef = useRef<SpeechOutputService | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
+  const safeHistory = conversationHistory || [];
+
   useEffect(() => {
     speechInputRef.current = new SpeechInputService();
     speechOutputRef.current = new SpeechOutputService();
@@ -84,11 +86,11 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [conversationHistory, interimText, isThinking]);
+  }, [safeHistory, interimText, isThinking]);
 
   // Initial greeting when conversation is started
   const startConversation = async () => {
-    if (conversationHistory.length > 0) return;
+    if (safeHistory.length > 0) return;
 
     setIsThinking(true);
     setActiveStatus("thinking");
@@ -195,7 +197,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    const newHistory = [...conversationHistory, userMsg];
+    const newHistory = [...safeHistory, userMsg];
     onUpdateHistory(newHistory);
 
     // Gemini Thinking & Reply
@@ -234,7 +236,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     if (speechOutputRef.current) speechOutputRef.current.stop();
 
     // Compile narrative from patient messages
-    const compiledNarrative = conversationHistory
+    const compiledNarrative = safeHistory
       .filter((m) => m.sender === "patient")
       .map((m) => m.text)
       .join(". ");
@@ -276,21 +278,21 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         {/* Dynamic Status Text */}
         <div className="mt-2 space-y-0.5">
           <h4 className="text-sm font-bold text-white tracking-wide">
-            {activeStatus === "speaking" && "🤖 Gemini AI Speaking..."}
+            {activeStatus === "speaking" && "🤖 RapiCure AI Speaking..."}
             {activeStatus === "listening" && "🎤 Listening to Patient..."}
-            {activeStatus === "thinking" && "🧠 Gemini AI is Analyzing Symptoms..."}
-            {activeStatus === "idle" && (conversationHistory.length === 0 ? "AI Voice Consultation Ready" : "Voice Consultation Active")}
+            {activeStatus === "thinking" && "🧠 RapiCure AI is Analyzing Symptoms..."}
+            {activeStatus === "idle" && (safeHistory.length === 0 ? "RapiCure Voice Consultation Ready" : "Voice Consultation Active")}
           </h4>
           <p className="text-[11px] text-slate-400">
             {activeStatus === "listening"
               ? selectedLang === "hi-IN" ? "मरीज अपनी समस्या खुलकर बोलें..." : "Please speak your symptoms naturally..."
-              : "Bilingual Clinical Interview (Hindi / English)"}
+              : "Bilingual Clinical Voice Interview (Hindi / English)"}
           </p>
         </div>
 
         {/* Primary Controls */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4">
-          {conversationHistory.length === 0 ? (
+          {safeHistory.length === 0 ? (
             <button
               type="button"
               onClick={startConversation}
@@ -344,11 +346,11 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         <div className="flex items-center justify-between">
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
             <span>Conversational Dialogue Stream</span>
-            {conversationHistory.length > 0 && (
-              <span className="text-teal-400 font-normal">({conversationHistory.length} turns)</span>
+            {safeHistory.length > 0 && (
+              <span className="text-teal-400 font-normal">({safeHistory.length} turns)</span>
             )}
           </label>
-          {conversationHistory.length > 0 && (
+          {safeHistory.length > 0 && (
             <button
               type="button"
               onClick={() => onUpdateHistory([])}
@@ -363,13 +365,13 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
           ref={chatScrollRef}
           className="h-56 overflow-y-auto space-y-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs"
         >
-          {conversationHistory.length === 0 ? (
+          {safeHistory.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 space-y-1">
               <Bot className="w-6 h-6 text-slate-600" />
               <p>Click "Start Voice Consultation" to begin AI audio interview.</p>
             </div>
           ) : (
-            conversationHistory.map((msg) => (
+            safeHistory.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex gap-2.5 ${

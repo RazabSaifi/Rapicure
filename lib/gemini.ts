@@ -15,14 +15,14 @@ export async function converseClinicalIntakeWithGemini(params: {
   patientInfo?: PatientInfo;
   vitals?: VitalsData;
 }): Promise<string> {
-  const { apiKey, language, conversationHistory, patientInput, patientInfo, vitals } = params;
+  const { apiKey, language, conversationHistory = [], patientInput, patientInfo, vitals } = params;
 
   // Failsafe fallback simulation if no API key is provided
   if (!apiKey) {
     await new Promise((resolve) => setTimeout(resolve, 800));
     if (language === "hi-IN") {
       if (conversationHistory.length === 0) {
-        return "नमस्ते! मैं मेदअसिस्ट एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है और यह कब से शुरू हुई?";
+        return "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है और यह कब से शुरू हुई?";
       }
       if (patientInput.includes("बुखार") || patientInput.includes("fever") || patientInput.includes("ताप")) {
         return "क्या आपको बुखार के साथ ठंड या कंपकंपी लग रही है, और क्या सिर में या आँखों के पीछे दर्द है?";
@@ -33,13 +33,13 @@ export async function converseClinicalIntakeWithGemini(params: {
       return "समझ गया। क्या आपको सांस लेने में कोई परेशानी या बहुत ज्यादा कमजोरी महसूस हो रही है?";
     } else {
       if (conversationHistory.length === 0) {
-        return "Hello! I am MedAssist AI. Please tell me what symptoms you are experiencing and since when?";
+        return "Hello! I am RapiCure AI. Please tell me what symptoms you are experiencing and since when?";
       }
       return "I understand. Are you also experiencing any severe pain, chills, vomiting, or dizziness?";
     }
   }
 
-  const systemInstruction = `You are "MedAssist AI", an empathetic, intelligent pre-OPD clinical triage assistant at AIIMS Jodhpur hospital.
+  const systemInstruction = `You are "RapiCure AI", an empathetic, intelligent pre-OPD clinical triage assistant at AIIMS Jodhpur hospital.
 You are having an interactive SPOKEN voice conversation with a patient waiting outside the OPD cabin.
 
 RULES FOR YOUR RESPONSE:
@@ -55,7 +55,7 @@ RULES FOR YOUR RESPONSE:
 
   // Build the conversation transcript
   const historyFormatted = conversationHistory
-    .map((msg) => `${msg.sender === "patient" ? "Patient" : "MedAssist AI"}: ${msg.text}`)
+    .map((msg) => `${msg.sender === "patient" ? "Patient" : "RapiCure AI"}: ${msg.text}`)
     .join("\n");
 
   const promptText = `
@@ -127,7 +127,7 @@ export async function processClinicalTriageWithGemini(params: {
     vitals,
     patientInfo,
     labImageBase64,
-    conversationHistory,
+    conversationHistory = [],
     useFailsafeFallback,
   } = params;
 
@@ -144,7 +144,7 @@ export async function processClinicalTriageWithGemini(params: {
     );
   }
 
-  const systemInstruction = `You are an expert Clinical Triage Consultant & Medical Scribe AI operating in a high-volume Indian government tertiary hospital OPD (such as AIIMS or Dr. S.N. Medical College Jodhpur).
+  const systemInstruction = `You are an expert Clinical Triage Consultant & Medical Scribe AI named "RapiCure AI" operating in a high-volume Indian government tertiary hospital OPD (such as AIIMS or Dr. S.N. Medical College Jodhpur).
 Your task is to review:
 1. Patient Demographics: Name, Age, Gender.
 2. Patient Chief Complaint & Multi-turn Conversational Transcript (spoken in vernacular Hindi/English/Hinglish).
@@ -175,7 +175,7 @@ CRITICAL INSTRUCTIONS:
   if (conversationHistory && conversationHistory.length > 0) {
     conversationalContext += "\n\nFULL INTERACTIVE VOICE CONVERSATION TRANSCRIPT:\n" +
       conversationHistory
-        .map((m) => `${m.sender === "patient" ? "Patient" : "MedAssist AI"}: ${m.text}`)
+        .map((m) => `${m.sender === "patient" ? "Patient" : "RapiCure AI"}: ${m.text}`)
         .join("\n");
   }
 

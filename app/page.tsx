@@ -43,7 +43,7 @@ export default function Home() {
   // Load API Key from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedKey = localStorage.getItem("medassist_gemini_api_key");
+      const savedKey = localStorage.getItem("rapicure_gemini_api_key");
       if (savedKey) {
         setApiKey(savedKey);
       }
@@ -53,9 +53,9 @@ export default function Home() {
   const handleSaveApiKey = (key: string) => {
     setApiKey(key);
     if (typeof window !== "undefined") {
-      localStorage.setItem("medassist_gemini_api_key", key);
+      localStorage.setItem("rapicure_gemini_api_key", key);
     }
-    showToast(key ? "Gemini API key saved!" : "API key cleared");
+    showToast(key ? "Gemini API key saved for RapiCure!" : "API key cleared");
   };
 
   const showToast = (msg: string) => {
@@ -78,7 +78,7 @@ export default function Home() {
       {
         id: "1",
         sender: "gemini",
-        text: "नमस्ते! मैं मेदअसिस्ट एआई हूँ। कृपया बताइए आपको क्या तकलीफ हो रही है?",
+        text: "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए आपको क्या तकलीफ हो रही है?",
         timestamp: "10:00 AM",
       },
       {
@@ -271,7 +271,7 @@ export default function Home() {
       {/* Footer info */}
       <footer className="no-print border-t border-slate-900 py-4 text-center text-xs text-slate-600">
         <p>
-          MedAssist AI • Developed for AAYU 2026 AI Medical Innovation Hackathon (DHR, MoHFW, Google for Developers)
+          RapiCure AI • Developed for AAYU 2026 AI Medical Innovation Hackathon (DHR, MoHFW, Google for Developers)
         </p>
       </footer>
 
