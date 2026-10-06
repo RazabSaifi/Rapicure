@@ -6,7 +6,7 @@ import { IntakeKiosk } from "@/components/IntakeKiosk";
 import { DoctorCockpit } from "@/components/DoctorCockpit";
 import { PrintableSlip } from "@/components/PrintableSlip";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { PatientInfo, VitalsData, TriageResult } from "@/lib/types";
+import { PatientInfo, VitalsData, TriageResult, ChatMessage } from "@/lib/types";
 import { DEMO_CASES } from "@/lib/demoData";
 import { processClinicalTriageWithGemini } from "@/lib/gemini";
 
@@ -32,6 +32,7 @@ export default function Home() {
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(INITIAL_PATIENT);
   const [vitals, setVitals] = useState<VitalsData>(INITIAL_VITALS);
   const [narrativeText, setNarrativeText] = useState<string>("");
+  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
   const [labImageBase64, setLabImageBase64] = useState<string | null>(null);
 
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
@@ -66,17 +67,45 @@ export default function Home() {
 
   // 1-Click Failsafe Dengue Demo Case
   const handleLoadDengueDemo = async () => {
-    const demo = DEMO_CASES[0]; // Dengue Warning Signs
+    const demo = DEMO_CASES[0];
     setPatientInfo(demo.patientInfo);
     setVitals(demo.vitals);
     setNarrativeText(demo.narrative);
     setLabImageBase64(null);
 
-    showToast("⚡ Loaded realistic Dengue Emergency Demo Case!");
+    // Populate conversational dialogue for demo
+    const demoChat: ChatMessage[] = [
+      {
+        id: "1",
+        sender: "gemini",
+        text: "नमस्ते! मैं मेदअसिस्ट एआई हूँ। कृपया बताइए आपको क्या तकलीफ हो रही है?",
+        timestamp: "10:00 AM",
+      },
+      {
+        id: "2",
+        sender: "patient",
+        text: "डॉक्टर साहब, 4 दिन से बहुत तेज बुखार और ठंड लग रही है। आँखों के पीछे बहुत दर्द है।",
+        timestamp: "10:01 AM",
+      },
+      {
+        id: "3",
+        sender: "gemini",
+        text: "क्या पेट में दर्द या उल्टी आ रही है, और क्या हाथों-पैरों पर लाल चकत्ते दिखे हैं?",
+        timestamp: "10:01 AM",
+      },
+      {
+        id: "4",
+        sender: "patient",
+        text: "हाँ, कल रात से पेट में तेज दर्द है, बहुत चक्कर आ रहे हैं और हाथों पर लाल चकत्ते निकल आए हैं।",
+        timestamp: "10:02 AM",
+      },
+    ];
+    setConversationHistory(demoChat);
 
-    // Automatically trigger analysis for seamless 1-click stage demo
+    showToast("⚡ Loaded realistic Dengue Emergency Demo Case with Voice Chat!");
+
     setIsLoading(true);
-    setLoadingStepText("Ingesting Hindi voice transcript & tachycardia vitals...");
+    setLoadingStepText("Ingesting Hindi voice conversation & vitals...");
 
     setTimeout(() => {
       setLoadingStepText("Synthesizing clinical SOAP & red flags with Gemini 2.0 Flash...");
@@ -88,6 +117,7 @@ export default function Home() {
         narrativeText: demo.narrative,
         vitals: demo.vitals,
         patientInfo: demo.patientInfo,
+        conversationHistory: demoChat,
         useFailsafeFallback: true,
       });
 
@@ -96,16 +126,17 @@ export default function Home() {
         patientInfo: demo.patientInfo,
         vitals: demo.vitals,
         narrativeText: demo.narrative,
+        conversationHistory: demoChat,
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
       console.error(err);
-      // Failsafe fallback
       setTriageResult({
         ...demo.simulatedResponse,
         patientInfo: demo.patientInfo,
         vitals: demo.vitals,
         narrativeText: demo.narrative,
+        conversationHistory: demoChat,
         timestamp: new Date().toISOString(),
       });
     } finally {
@@ -122,6 +153,7 @@ export default function Home() {
     });
     setVitals(INITIAL_VITALS);
     setNarrativeText("");
+    setConversationHistory([]);
     setLabImageBase64(null);
     setTriageResult(null);
     showToast("Ready for next patient intake.");
@@ -129,16 +161,16 @@ export default function Home() {
 
   // Process Triage via Gemini 2.0 Flash
   const handleProcessTriage = async () => {
-    if (!narrativeText && !labImageBase64) {
-      alert("Please provide patient complaint (voice or text) or attach a lab report.");
+    if (!narrativeText && !labImageBase64 && conversationHistory.length === 0) {
+      alert("Please provide patient complaint via AI voice dialogue or attach a lab report.");
       return;
     }
 
     setIsLoading(true);
-    setLoadingStepText("Multimodal ingestion of voice transcript, vitals & lab data...");
+    setLoadingStepText("Multimodal synthesis of AI voice interview, vitals & lab data...");
 
     setTimeout(() => {
-      setLoadingStepText("Gemini 2.0 Flash is generating clinical SOAP & triage score...");
+      setLoadingStepText("Gemini 2.0 Flash is generating clinical SOAP & triage priority...");
     }, 700);
 
     try {
@@ -148,6 +180,7 @@ export default function Home() {
         vitals,
         patientInfo,
         labImageBase64,
+        conversationHistory,
         useFailsafeFallback: true,
       });
 
@@ -156,6 +189,7 @@ export default function Home() {
         patientInfo,
         vitals,
         narrativeText,
+        conversationHistory,
         labImagePreview: labImageBase64,
         timestamp: new Date().toISOString(),
       });
@@ -196,7 +230,7 @@ export default function Home() {
             <span>AIIMS Jodhpur Pre-OPD Triage Hub</span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400">
-              Hindi Voice Transcription + 4 Vitals + Multimodal Lab Report Synthesis
+              Interactive AI Voice Consultation (Hindi/English) + Vitals + Lab OCR Scribe
             </span>
           </div>
           <span className="text-[11px] text-slate-500 font-mono">Model: gemini-2.0-flash</span>
@@ -206,12 +240,15 @@ export default function Home() {
           {/* Left Column: Intake Kiosk (5/12 cols) */}
           <div className="lg:col-span-6 xl:col-span-5">
             <IntakeKiosk
+              apiKey={apiKey}
               patientInfo={patientInfo}
               onPatientInfoChange={setPatientInfo}
               vitals={vitals}
               onVitalsChange={setVitals}
               narrativeText={narrativeText}
               onNarrativeChange={setNarrativeText}
+              conversationHistory={conversationHistory}
+              onConversationHistoryChange={setConversationHistory}
               labImageBase64={labImageBase64}
               onLabImageChange={setLabImageBase64}
               onProcessTriage={handleProcessTriage}

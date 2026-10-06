@@ -16,6 +16,13 @@ export interface PatientInfo {
   tokenNo: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  sender: "patient" | "gemini";
+  text: string;
+  timestamp: string;
+}
+
 export interface GeminiSOAPResponse {
   priority: PriorityLevel;
   priority_reason: string;
@@ -32,6 +39,7 @@ export interface TriageResult extends GeminiSOAPResponse {
   narrativeText: string;
   timestamp: string;
   labImagePreview?: string | null;
+  conversationHistory?: ChatMessage[];
 }
 
 export interface DemoCase {

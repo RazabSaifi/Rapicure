@@ -14,18 +14,24 @@ import {
   AlertCircle,
   FileCheck2,
   Languages,
+  Bot,
+  ListTodo,
 } from "lucide-react";
 import { VitalsInput } from "./VitalsInput";
+import { VoiceConversationStudio } from "./VoiceConversationStudio";
 import { SpeechInputService } from "@/lib/speech";
-import { PatientInfo, VitalsData } from "@/lib/types";
+import { PatientInfo, VitalsData, ChatMessage } from "@/lib/types";
 
 interface IntakeKioskProps {
+  apiKey: string;
   patientInfo: PatientInfo;
   onPatientInfoChange: (info: PatientInfo) => void;
   vitals: VitalsData;
   onVitalsChange: (vitals: VitalsData) => void;
   narrativeText: string;
   onNarrativeChange: (text: string) => void;
+  conversationHistory: ChatMessage[];
+  onConversationHistoryChange: (history: ChatMessage[]) => void;
   labImageBase64: string | null;
   onLabImageChange: (base64: string | null) => void;
   onProcessTriage: () => void;
@@ -34,12 +40,15 @@ interface IntakeKioskProps {
 }
 
 export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
+  apiKey,
   patientInfo,
   onPatientInfoChange,
   vitals,
   onVitalsChange,
   narrativeText,
   onNarrativeChange,
+  conversationHistory,
+  onConversationHistoryChange,
   labImageBase64,
   onLabImageChange,
   onProcessTriage,
@@ -47,6 +56,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
   loadingStepText,
 }) => {
   const [selectedLang, setSelectedLang] = useState<"hi-IN" | "en-IN">("hi-IN");
+  const [intakeMode, setIntakeMode] = useState<"conversational" | "quick">("conversational");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const speechServiceRef = useRef<SpeechInputService | null>(null);
@@ -121,6 +131,11 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const handleFinishFromConversation = (compiledNarrative: string) => {
+    onNarrativeChange(compiledNarrative);
+    onProcessTriage();
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-900/50 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm space-y-5">
       {/* Kiosk Header */}
@@ -157,6 +172,35 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
             🌐 English
           </button>
         </div>
+      </div>
+
+      {/* Mode Selector Tabs: Conversational Voice vs Quick Dictation */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+        <button
+          type="button"
+          onClick={() => setIntakeMode("conversational")}
+          className={`flex items-center justify-center gap-2 py-2 rounded-lg font-bold transition-all ${
+            intakeMode === "conversational"
+              ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span>AI Voice Dialogue</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIntakeMode("quick")}
+          className={`flex items-center justify-center gap-2 py-2 rounded-lg font-bold transition-all ${
+            intakeMode === "quick"
+              ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Mic className="w-3.5 h-3.5" />
+          <span>Quick Dictation</span>
+        </button>
       </div>
 
       {/* Patient Basic Info Row */}
@@ -221,54 +265,67 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
         </div>
       </div>
 
-      {/* Voice Narrative Studio */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Volume2 className="w-3.5 h-3.5 text-teal-400" />
-            <span>Vernacular Chief Complaint (Speech / Text)</span>
-          </label>
-          {isRecording && (
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              Listening in {selectedLang === "hi-IN" ? "हिन्दी" : "English"}...
-            </span>
+      {/* Intake Mode 1: Conversational AI Voice Studio */}
+      {intakeMode === "conversational" ? (
+        <VoiceConversationStudio
+          apiKey={apiKey}
+          selectedLang={selectedLang}
+          patientInfo={patientInfo}
+          vitals={vitals}
+          conversationHistory={conversationHistory}
+          onUpdateHistory={onConversationHistoryChange}
+          onFinishConsultation={handleFinishFromConversation}
+          isLoadingSOAP={isLoading}
+        />
+      ) : (
+        /* Intake Mode 2: Quick Dictation / Manual Text */
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+              <span>Vernacular Chief Complaint (Speech / Text)</span>
+            </label>
+            {isRecording && (
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                Listening in {selectedLang === "hi-IN" ? "हिन्दी" : "English"}...
+              </span>
+            )}
+          </div>
+
+          <div className="relative">
+            <textarea
+              rows={4}
+              value={narrativeText}
+              onChange={(e) => onNarrativeChange(e.target.value)}
+              placeholder="मरीज की भाषा में तकलीफ बोलें या लिखें (e.g., '4 दिन से तेज बुखार, पेट दर्द और हाथों पर लाल चकत्ते...')"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 pr-14 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 leading-relaxed font-sans resize-none"
+            />
+
+            <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleRecording}
+                className={`p-3 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center ${
+                  isRecording
+                    ? "bg-rose-500 text-white animate-bounce ring-4 ring-rose-500/30"
+                    : "bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 hover:scale-105 active:scale-95 shadow-teal-500/30"
+                }`}
+                title={isRecording ? "Stop voice recording" : "Speak chief complaint"}
+              >
+                {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          {recordingError && (
+            <p className="text-[11px] text-rose-400 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {recordingError}
+            </p>
           )}
         </div>
-
-        <div className="relative">
-          <textarea
-            rows={4}
-            value={narrativeText}
-            onChange={(e) => onNarrativeChange(e.target.value)}
-            placeholder="मरीज की भाषा में तकलीफ बोलें या लिखें (e.g., '4 दिन से तेज बुखार, पेट दर्द और हाथों पर लाल चकत्ते...')"
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 pr-14 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 leading-relaxed font-sans resize-none"
-          />
-
-          {/* Floating Mic Button inside Textarea */}
-          <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={toggleRecording}
-              className={`p-3 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center ${
-                isRecording
-                  ? "bg-rose-500 text-white animate-bounce ring-4 ring-rose-500/30"
-                  : "bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 hover:scale-105 active:scale-95 shadow-teal-500/30"
-              }`}
-              title={isRecording ? "Stop voice recording" : "Speak chief complaint"}
-            >
-              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {recordingError && (
-          <p className="text-[11px] text-rose-400 flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5" />
-            {recordingError}
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Vitals Matrix Input */}
       <VitalsInput vitals={vitals} onChange={onVitalsChange} disabled={isLoading} />
@@ -332,27 +389,29 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
         )}
       </div>
 
-      {/* Synthesis Action Button */}
-      <div className="pt-2">
-        <button
-          type="button"
-          onClick={onProcessTriage}
-          disabled={isLoading || (!narrativeText && !labImageBase64)}
-          className="w-full relative group overflow-hidden rounded-xl p-3.5 font-bold text-slate-950 shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 active:scale-[0.99]"
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center gap-2 text-slate-950 text-sm font-semibold">
-              <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-              <span>{loadingStepText || "Gemini 2.0 Flash is synthesizing..."}</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center gap-2 text-sm tracking-wide">
-              <Sparkles className="w-4 h-4 fill-slate-950" />
-              <span>Synthesize Clinical SOAP & Triage Brief</span>
-            </div>
-          )}
-        </button>
-      </div>
+      {/* Direct Synthesize Action Button */}
+      {intakeMode === "quick" && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={onProcessTriage}
+            disabled={isLoading || (!narrativeText && !labImageBase64)}
+            className="w-full relative group overflow-hidden rounded-xl p-3.5 font-bold text-slate-950 shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 active:scale-[0.99]"
+          >
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2 text-slate-950 text-sm font-semibold">
+                <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                <span>{loadingStepText || "Gemini 2.0 Flash is synthesizing..."}</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-sm tracking-wide">
+                <Sparkles className="w-4 h-4 fill-slate-950" />
+                <span>Synthesize Clinical SOAP & Triage Brief</span>
+              </div>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
