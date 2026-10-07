@@ -11,6 +11,8 @@ export const DEMO_CASES: DemoCase[] = [
       gender: "Male",
       uhid: "AIIMS-JDH-2026-89412",
       tokenNo: "OPD-042",
+      chronicConditions: ["Hypertension (HTN / High BP)"],
+      currentMedications: ["Telmisartan (40mg / 80mg)", "Paracetamol (650mg / Dolo)"],
     },
     vitals: {
       bpSystolic: "96",
@@ -54,6 +56,15 @@ export const DEMO_CASES: DemoCase[] = [
       gender: "Male",
       uhid: "AIIMS-JDH-2026-67310",
       tokenNo: "OPD-019",
+      chronicConditions: [
+        "Chronic Obstructive Pulmonary Disease (COPD)",
+        "Hypertension (HTN / High BP)",
+      ],
+      currentMedications: [
+        "Budesonide + Formoterol Inhaler",
+        "Salbutamol Inhaler (Asthalin)",
+        "Amlodipine (5mg / 10mg)",
+      ],
     },
     vitals: {
       bpSystolic: "158",

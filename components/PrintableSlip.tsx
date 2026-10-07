@@ -107,6 +107,38 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({ triageResult }) =>
         </table>
       </div>
 
+      {/* Chronic Conditions & Current Medications */}
+      {((triageResult.patientInfo.chronicConditions &&
+        triageResult.patientInfo.chronicConditions.length > 0) ||
+        (triageResult.patientInfo.currentMedications &&
+          triageResult.patientInfo.currentMedications.length > 0)) && (
+        <div className="mb-4 border border-black p-2 text-xs">
+          <h2 className="text-[11px] font-black uppercase tracking-wide border-b border-gray-300 pb-1 mb-1">
+            Patient Medical Background & Active Drug Therapy
+          </h2>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div>
+              <span className="font-bold">Chronic Conditions / Comorbidities: </span>
+              <span>
+                {triageResult.patientInfo.chronicConditions &&
+                triageResult.patientInfo.chronicConditions.length > 0
+                  ? triageResult.patientInfo.chronicConditions.join("; ")
+                  : "None reported"}
+              </span>
+            </div>
+            <div>
+              <span className="font-bold">Current Active Medications: </span>
+              <span>
+                {triageResult.patientInfo.currentMedications &&
+                triageResult.patientInfo.currentMedications.length > 0
+                  ? triageResult.patientInfo.currentMedications.join("; ")
+                  : "None reported"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Red Flag Warning Box */}
       {triageResult.red_flags && (
         <div className="border-2 border-black p-2 mb-4 bg-gray-50 text-xs">

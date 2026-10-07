@@ -16,6 +16,8 @@ const INITIAL_PATIENT: PatientInfo = {
   gender: "Male",
   uhid: "",
   tokenNo: "OPD-042",
+  chronicConditions: [],
+  currentMedications: [],
 };
 
 const INITIAL_VITALS: VitalsData = {
@@ -217,7 +219,7 @@ export default function Home() {
         onLoadDengueDemo={handleLoadDengueDemo}
         onReset={handleReset}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        hasApiKey={!!apiKey}
+        hasApiKey={true}
         isLoading={isLoading}
       />
 

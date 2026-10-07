@@ -21,6 +21,8 @@ import {
   FileBadge2,
   Share2,
   Sparkles,
+  HeartPulse,
+  Pill,
 } from "lucide-react";
 
 interface DoctorCockpitProps {
@@ -76,10 +78,23 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({
 
   const handleCopySoap = () => {
     if (!triageResult) return;
+    const chronicStr =
+      triageResult.patientInfo.chronicConditions &&
+      triageResult.patientInfo.chronicConditions.length > 0
+        ? triageResult.patientInfo.chronicConditions.join(", ")
+        : "None reported";
+    const medsStr =
+      triageResult.patientInfo.currentMedications &&
+      triageResult.patientInfo.currentMedications.length > 0
+        ? triageResult.patientInfo.currentMedications.join(", ")
+        : "None reported";
+
     const text = `
 === MEDASSIST AI CLINICAL BRIEF ===
 Patient: ${triageResult.patientInfo.name} (${triageResult.patientInfo.age}y/${triageResult.patientInfo.gender}) | Token: ${triageResult.patientInfo.tokenNo}
 Priority: ${triageResult.priority} (${triageResult.priority_reason})
+Chronic Conditions: ${chronicStr}
+Current Medications: ${medsStr}
 
 [SUBJECTIVE]
 ${triageResult.subjective}
@@ -230,6 +245,71 @@ ${triageResult.plan.map((p, i) => `${i + 1}. ${p}`).join("\n")}
           </div>
         </div>
       </div>
+
+      {/* Patient Background Card: Chronic Conditions & Current Medications */}
+      {((triageResult.patientInfo.chronicConditions &&
+        triageResult.patientInfo.chronicConditions.length > 0) ||
+        (triageResult.patientInfo.currentMedications &&
+          triageResult.patientInfo.currentMedications.length > 0)) && (
+        <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2.5">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Patient Medical History & Active Drug Therapy
+            </span>
+            <span className="text-[10px] text-teal-400 font-mono">
+              {triageResult.patientInfo.name || "Patient"} • {triageResult.patientInfo.age || "--"}y
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            {/* Chronic Conditions */}
+            <div>
+              <span className="text-[10px] font-semibold text-rose-400 flex items-center gap-1 mb-1">
+                <HeartPulse className="w-3 h-3 text-rose-400" />
+                Chronic Conditions:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {triageResult.patientInfo.chronicConditions &&
+                triageResult.patientInfo.chronicConditions.length > 0 ? (
+                  triageResult.patientInfo.chronicConditions.map((cond, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-rose-950/40 text-rose-300 border border-rose-500/30"
+                    >
+                      {cond}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-500 text-[11px] italic">None reported</span>
+                )}
+              </div>
+            </div>
+
+            {/* Current Medications */}
+            <div>
+              <span className="text-[10px] font-semibold text-cyan-400 flex items-center gap-1 mb-1">
+                <Pill className="w-3 h-3 text-cyan-400" />
+                Current Medications:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {triageResult.patientInfo.currentMedications &&
+                triageResult.patientInfo.currentMedications.length > 0 ? (
+                  triageResult.patientInfo.currentMedications.map((med, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-cyan-950/40 text-cyan-300 border border-cyan-500/30"
+                    >
+                      {med}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-500 text-[11px] italic">None reported</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hands-Free Audio Brief Bar */}
       <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
