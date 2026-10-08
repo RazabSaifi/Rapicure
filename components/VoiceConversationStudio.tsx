@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Mic,
   MicOff,
@@ -34,19 +34,27 @@ interface VoiceConversationStudioProps {
 }
 
 const QUICK_SYMPTOM_CHIPS_HI = [
-  "4 दिन से तेज बुखार है",
+  "4 दिन से तेज बुखार और कंपकंपी है",
   "पेट में तेज दर्द और उल्टी जैसा लग रहा है",
   "हाथों पर लाल चकत्ते निकल आए हैं",
-  "सांस बहुत ज्यादा फूल रही है",
+  "सांस बहुत ज्यादा फूल रही है, सीने में भारीपन है",
   "बहुत कमजोरी और चक्कर आ रहे हैं",
 ];
 
 const QUICK_SYMPTOM_CHIPS_EN = [
   "High fever with chills for 3 days",
-  "Severe stomach pain and vomiting",
+  "Severe stomach pain and recurrent vomiting",
   "Red rash on arms with joint pain",
   "Difficulty breathing and chest tightness",
   "Severe weakness and postural dizziness",
+];
+
+const LIVE_VOICES: Array<{ id: "Aoede" | "Zephyr" | "Kore" | "Puck" | "Fenrir"; name: string; desc: string }> = [
+  { id: "Aoede", name: "Aoede (Warm Clinician)", desc: "Empathetic, clear, professional" },
+  { id: "Zephyr", name: "Zephyr (Crisp)", desc: "Quick, articulate triage voice" },
+  { id: "Kore", name: "Kore (Gentle)", desc: "Calm, reassuring bedside manner" },
+  { id: "Puck", name: "Puck (Energetic)", desc: "Bright, friendly cadence" },
+  { id: "Fenrir", name: "Fenrir (Authoritative)", desc: "Deep, calm senior doctor" },
 ];
 
 export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = ({
@@ -70,8 +78,16 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
 
-  const speechInputRef = useRef<SpeechInputService | null>(null);
-  const speechOutputRef = useRef<SpeechOutputService | null>(null);
+  const [inputAudioLevel, setInputAudioLevel] = useState(0);
+  const [outputAudioLevel, setOutputAudioLevel] = useState(0);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [manualInput, setManualInput] = useState("");
+  const [streamingAgentText, setStreamingAgentText] = useState("");
+  const [streamingUserSpeech, setStreamingUserSpeech] = useState("");
+  const [audioTestPlayed, setAudioTestPlayed] = useState(false);
+
+  // References
+  const liveClientRef = useRef<GeminiLiveClient | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const silenceTimerRef = useRef<any>(null);
   const latestTranscriptRef = useRef<string>("");
@@ -109,7 +125,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [safeHistory, interimText, isThinking]);
+  }, [safeHistory, streamingAgentText, streamingUserSpeech, liveStatus]);
 
   // Request Mic Permission explicitly
   const handleRequestPermission = async (): Promise<boolean> => {
@@ -291,29 +307,69 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       text: patientText,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
+  }, []);
 
-    const newHistory = [...safeHistory, userMsg];
-    onUpdateHistory(newHistory);
+  const [isTapSpeaking, setIsTapSpeaking] = useState(false);
 
-    // Gemini Thinking & Reply
-    setIsThinking(true);
-    setActiveStatus("thinking");
-
+  // Test speaker chime
+  const testSpeaker = () => {
     try {
-      const reply = await converseClinicalIntakeWithGemini({
-        apiKey,
-        language: selectedLang,
-        conversationHistory: newHistory,
-        patientInput: patientText,
-        patientInfo,
-        vitals,
-      });
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+      setAudioTestPlayed(true);
+      setTimeout(() => setAudioTestPlayed(false), 2000);
+    } catch (e) {
+      console.warn("Audio test error:", e);
+    }
+  };
 
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: "gemini",
-        text: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  // Immediate answer trigger (bypasses silence waiting)
+  const handleAnswerNow = () => {
+    if (liveClientRef.current) {
+      liveClientRef.current.sendAudioStreamEnd();
+      setStatusMessage("Gemini turant bol raha hai...");
+    }
+  };
+
+  // Direct In-App Tap to Speak (Speech Recognition)
+  const startTapToSpeak = () => {
+    try {
+      const win = window as any;
+      const SpeechRec = win.SpeechRecognition || win.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        setStatusMessage("Please speak into the live call or use quick symptom chips.");
+        return;
+      }
+      const rec = new SpeechRec();
+      rec.lang = selectedLang === "hi-IN" ? "hi-IN" : "en-IN";
+      rec.interimResults = true;
+      rec.continuous = false;
+
+      setIsTapSpeaking(true);
+      setStatusMessage("Aap bolein, sun rahe hain (Listening)...");
+
+      rec.onresult = (e: any) => {
+        let text = "";
+        for (let i = 0; i < e.results.length; i++) {
+          text += e.results[i][0]?.transcript || "";
+        }
+        setStreamingUserSpeech(text);
+        if (e.results[0]?.isFinal && text.trim()) {
+          handleSendTextOrChip(text.trim());
+          setStreamingUserSpeech("");
+          setIsTapSpeaking(false);
+        }
       };
 
       onUpdateHistory([...newHistory, aiMsg]);
@@ -324,6 +380,143 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       setIsThinking(false);
       setActiveStatus("idle");
     }
+  };
+
+  // Start Gemini Live Full-Duplex Continuous Conversation
+  const startLiveConversation = useCallback(async () => {
+    if (liveClientRef.current) {
+      liveClientRef.current.stop();
+    }
+
+    setStreamingAgentText("");
+    setStreamingUserSpeech("");
+    setMicNotice(null);
+
+    const client = new GeminiLiveClient({
+      onStatusChange: (status, msg) => {
+        setLiveStatus(status);
+        if (msg) setStatusMessage(msg);
+      },
+      onMicPermissionChange: (hasMic, notice) => {
+        setHasMicAccess(hasMic);
+        if (notice) setMicNotice(notice);
+      },
+      onAudioLevelChange: (inLevel, outLevel) => {
+        setInputAudioLevel(inLevel);
+        setOutputAudioLevel(outLevel);
+      },
+      onTranscriptAgentChunk: (chunk) => {
+        setStreamingAgentText((prev) => prev + chunk);
+      },
+      onTranscriptAgentTurnComplete: (fullText) => {
+        if (fullText.trim()) {
+          const aiMsg: ChatMessage = {
+            id: Date.now().toString(),
+            sender: "gemini",
+            text: fullText.trim(),
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+          const next = [...historyRef.current, aiMsg];
+          historyRef.current = next;
+          onUpdateHistory(next);
+        }
+        setStreamingAgentText("");
+      },
+      onTranscriptUserSpeech: (speechText) => {
+        setStreamingUserSpeech(speechText);
+      },
+      onTranscriptUser: (text) => {
+        const userMsg: ChatMessage = {
+          id: Date.now().toString(),
+          sender: "patient",
+          text,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        const next = [...historyRef.current, userMsg];
+        historyRef.current = next;
+        onUpdateHistory(next);
+      },
+      onInterrupted: () => {
+        setOutputAudioLevel(0);
+        setStatusMessage("Patient speaking (Barge-in active)...");
+      },
+      onError: (err) => {
+        console.warn("Live API Error:", err);
+        setStatusMessage(err);
+      },
+    });
+
+    liveClientRef.current = client;
+
+    await client.start({
+      apiKey,
+      language: selectedLang,
+      voiceName: selectedVoice,
+      patientInfo: {
+        name: patientInfo.name,
+        age: patientInfo.age,
+        gender: patientInfo.gender,
+      },
+      vitals: {
+        bpSystolic: vitals.bpSystolic,
+        bpDiastolic: vitals.bpDiastolic,
+        pulse: vitals.pulse,
+        temp: vitals.temp,
+        spo2: vitals.spo2,
+      },
+    });
+  }, [apiKey, selectedLang, selectedVoice, patientInfo, vitals, onUpdateHistory]);
+
+  const handleRetryMic = async () => {
+    if (liveClientRef.current) {
+      const ok = await liveClientRef.current.retryMicrophone();
+      if (ok) {
+        setHasMicAccess(true);
+        setMicNotice(null);
+        setStatusMessage("Microphone connected successfully!");
+      }
+    }
+  };
+
+  const handleEndCall = () => {
+    if (liveClientRef.current) {
+      liveClientRef.current.stop();
+      liveClientRef.current = null;
+    }
+    setLiveStatus("idle");
+    setStatusMessage("Live call ended");
+    setInputAudioLevel(0);
+    setOutputAudioLevel(0);
+    setStreamingAgentText("");
+    setStreamingUserSpeech("");
+    setMicNotice(null);
+  };
+
+  const toggleMute = () => {
+    if (!liveClientRef.current) return;
+    const nextMuted = !isMicMuted;
+    setIsMicMuted(nextMuted);
+    liveClientRef.current.setMute(nextMuted);
+  };
+
+  const interruptModel = () => {
+    if (liveClientRef.current) {
+      liveClientRef.current.interrupt();
+    }
+  };
+
+  const handleSendTextOrChip = (text: string) => {
+    if (!text.trim()) return;
+    if (liveClientRef.current && (liveStatus === "ready" || liveStatus === "listening" || liveStatus === "speaking")) {
+      liveClientRef.current.sendTextMessage(text.trim());
+    } else {
+      startLiveConversation().then(() => {
+        setTimeout(() => {
+          liveClientRef.current?.sendTextMessage(text.trim());
+        }, 800);
+      });
+    }
+    setManualInput("");
   };
 
   const handleFinish = () => {
@@ -340,6 +533,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   };
 
   const quickChips = selectedLang === "hi-IN" ? QUICK_SYMPTOM_CHIPS_HI : QUICK_SYMPTOM_CHIPS_EN;
+  const isCallActive = liveStatus !== "idle" && liveStatus !== "error";
 
   return (
     <div className="space-y-4">
@@ -467,11 +661,13 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             </button>
           ) : (
             <>
-              {isListening ? (
+              {/* Fast Answer Now Button to eliminate silence latency */}
+              {(liveStatus === "listening" || liveStatus === "ready") && (
                 <button
                   type="button"
-                  onClick={stopListening}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/30 transition-all flex items-center gap-1.5 active:scale-95"
+                  onClick={handleAnswerNow}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md shadow-amber-400/30 transition-all flex items-center gap-1.5 active:scale-95 animate-pulse"
+                  title="Click when you finish speaking to hear Gemini respond immediately!"
                 >
                   <MicOff className="w-4 h-4" />
                   <span>Pause Mic</span>
@@ -487,6 +683,59 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
                 </button>
               )}
 
+              {/* Direct Tap to Speak while in call */}
+              <button
+                type="button"
+                onClick={startTapToSpeak}
+                disabled={isTapSpeaking}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95 border ${
+                  isTapSpeaking
+                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse"
+                    : "bg-slate-900 hover:bg-slate-800 text-teal-300 border-slate-700 hover:border-teal-500/50"
+                }`}
+                title="Record immediate spoken turn"
+              >
+                <Mic className={`w-3.5 h-3.5 ${isTapSpeaking ? "text-rose-400 animate-bounce" : "text-teal-400"}`} />
+                <span>{isTapSpeaking ? "Listening..." : "Push to Speak"}</span>
+              </button>
+
+              {/* Mute Mic */}
+              <button
+                type="button"
+                onClick={toggleMute}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95 border ${
+                  isMicMuted
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-700"
+                }`}
+              >
+                {isMicMuted ? <MicOff className="w-3.5 h-3.5 text-amber-400" /> : <Mic className="w-3.5 h-3.5" />}
+                <span>{isMicMuted ? "Unmute" : "Mute"}</span>
+              </button>
+
+              {/* Interrupt / Barge-in */}
+              {liveStatus === "speaking" && (
+                <button
+                  type="button"
+                  onClick={interruptModel}
+                  className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  <span>Interrupt</span>
+                </button>
+              )}
+
+              {/* End Call */}
+              <button
+                type="button"
+                onClick={handleEndCall}
+                className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 transition-all flex items-center gap-1.5 active:scale-95"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+                <span>End Call</span>
+              </button>
+
+              {/* Finish to SOAP */}
               <button
                 type="button"
                 onClick={handleFinish}
@@ -498,26 +747,35 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
                 ) : (
                   <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
                 )}
-                <span>Finish & Generate SOAP Note</span>
+                <span>Finish & SOAP</span>
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Real-time Dialogue Stream */}
+      {/* Live Transcript Chat Feed */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-            <span>Conversational Dialogue Stream</span>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <span>Live Conversation Transcript</span>
             {safeHistory.length > 0 && (
-              <span className="text-teal-400 font-normal">({safeHistory.length} turns)</span>
+              <span className="text-teal-400 font-mono">({safeHistory.length} turns)</span>
+            )}
+            {isCallActive && (
+              <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Live Audio Stream Active
+              </span>
             )}
           </label>
           {safeHistory.length > 0 && (
             <button
               type="button"
-              onClick={() => onUpdateHistory([])}
+              onClick={() => {
+                historyRef.current = [];
+                onUpdateHistory([]);
+              }}
               className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1"
             >
               <RotateCcw className="w-3 h-3" /> Clear Chat
@@ -527,7 +785,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
         <div
           ref={chatScrollRef}
-          className="h-56 overflow-y-auto space-y-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs"
+          className="h-60 overflow-y-auto space-y-2.5 p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs"
         >
           {safeHistory.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 space-y-1">
@@ -536,38 +794,38 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
               <p className="text-[10px] text-slate-600">Your browser will ask for microphone permission.</p>
             </div>
           ) : (
-            safeHistory.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 ${
-                  msg.sender === "patient" ? "justify-end" : "justify-start"
-                }`}
-              >
-                {msg.sender === "gemini" && (
-                  <div className="w-6 h-6 rounded-full bg-teal-500/20 border border-teal-500/40 text-teal-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                    AI
-                  </div>
-                )}
+            <>
+              {safeHistory.map((msg) => (
                 <div
-                  className={`max-w-[82%] p-2.5 rounded-2xl leading-relaxed ${
-                    msg.sender === "patient"
-                      ? "bg-teal-600 text-white rounded-br-none"
-                      : "bg-slate-900 border border-slate-750 text-slate-200 rounded-bl-none shadow"
+                  key={msg.id}
+                  className={`flex gap-2.5 ${
+                    msg.sender === "patient" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <p className="text-xs">{msg.text}</p>
-                  <span className="text-[9px] text-slate-400 mt-1 block text-right">
-                    {msg.timestamp}
-                  </span>
-                </div>
-                {msg.sender === "patient" && (
-                  <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                    P
+                  {msg.sender === "gemini" && (
+                    <div className="w-6 h-6 rounded-full bg-teal-500/20 border border-teal-500/40 text-teal-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                      AI
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[82%] p-2.5 rounded-2xl leading-relaxed ${
+                      msg.sender === "patient"
+                        ? "bg-teal-600 text-white rounded-br-none"
+                        : "bg-slate-900 border border-slate-750 text-slate-200 rounded-bl-none shadow"
+                    }`}
+                  >
+                    <p className="text-xs">{msg.text}</p>
+                    <span className="text-[9px] text-slate-400 mt-1 block text-right">
+                      {msg.timestamp}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))
-          )}
+                  {msg.sender === "patient" && (
+                    <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                      P
+                    </div>
+                  )}
+                </div>
+              ))}
 
           {/* Thinking indicator */}
           {isThinking && (
@@ -584,20 +842,21 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         </div>
       </div>
 
-      {/* Quick Symptom Chips */}
+      {/* Optional Quick Symptom Prompts */}
       <div className="space-y-1.5">
         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-          Quick Symptom Prompts (1-Click Reply)
+          Optional Quick Symptom Prompts (1-Click Test into Live Call)
         </label>
         <div className="flex flex-wrap gap-1.5">
           {quickChips.map((chip, idx) => (
             <button
               key={idx}
               type="button"
-              onClick={() => handlePatientMessage(chip)}
-              className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-teal-500/40 text-[11px] text-slate-300 hover:text-white transition-all text-left active:scale-95"
+              onClick={() => handleSendTextOrChip(chip)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-teal-500/50 text-[11px] text-slate-300 hover:text-white transition-all text-left active:scale-95 flex items-center gap-1.5"
             >
-              + {chip}
+              <Zap className="w-3 h-3 text-teal-400 shrink-0" />
+              <span>{chip}</span>
             </button>
           ))}
         </div>
@@ -610,14 +869,14 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
           value={manualInput}
           onChange={(e) => setManualInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handlePatientMessage(manualInput);
+            if (e.key === "Enter") handleSendTextOrChip(manualInput);
           }}
-          placeholder={selectedLang === "hi-IN" ? "या यहाँ टाइप करें..." : "Or type symptoms here..."}
+          placeholder="Optional: Type symptoms if not speaking into mic..."
           className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-500"
         />
         <button
           type="button"
-          onClick={() => handlePatientMessage(manualInput)}
+          onClick={() => handleSendTextOrChip(manualInput)}
           disabled={!manualInput.trim()}
           className="p-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 disabled:opacity-40 transition-all font-bold"
           title="Send message"

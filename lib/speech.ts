@@ -163,6 +163,8 @@ export class SpeechInputService {
       return false;
     }
 
+    this.currentLang = lang;
+    this.shouldKeepListening = true;
     this.onResultCallback = onResult;
     this.onErrorCallback = onError || null;
     this.onEndCallback = onEnd || null;
@@ -203,8 +205,8 @@ export class SpeechInputService {
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
-      } catch (e) {
-        console.warn("Error stopping speech recognition:", e);
+      } catch {
+        // ignore
       }
     }
     this.isListening = false;
@@ -242,7 +244,7 @@ export class SpeechOutputService {
       return;
     }
 
-    this.stop(); // Stop any ongoing speech
+    this.stop();
 
     const win = window as unknown as IWindow;
     const utterance = new SpeechSynthesisUtterance(text);

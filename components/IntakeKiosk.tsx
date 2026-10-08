@@ -16,11 +16,15 @@ import {
   Languages,
   Bot,
   ListTodo,
+  HeartPulse,
+  Pill,
 } from "lucide-react";
 import { VitalsInput } from "./VitalsInput";
 import { VoiceConversationStudio } from "./VoiceConversationStudio";
+import { SearchableMultiSelect } from "./SearchableMultiSelect";
 import { SpeechInputService } from "@/lib/speech";
 import { PatientInfo, VitalsData, ChatMessage } from "@/lib/types";
+import { COMMON_CHRONIC_CONDITIONS, COMMON_MEDICATIONS } from "@/lib/clinicalOptions";
 
 interface IntakeKioskProps {
   apiKey: string;
@@ -89,7 +93,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
 
       const started = await speechServiceRef.current.start(
         selectedLang,
-        (transcript, isFinal) => {
+        (transcript: string, isFinal: boolean) => {
           onNarrativeChange(initialText + transcript);
         },
         (error) => {
@@ -265,6 +269,51 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
             value={patientInfo.tokenNo}
             onChange={(e) => onPatientInfoChange({ ...patientInfo, tokenNo: e.target.value })}
             className="w-full bg-slate-900 border border-slate-750 px-2.5 py-1.5 rounded-lg text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-500 font-mono text-center"
+          />
+        </div>
+      </div>
+
+      {/* Patient Clinical Background: Chronic Conditions & Current Medications */}
+      <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-teal-400" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              Clinical Background & Comorbidities
+            </h3>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium">
+            Searchable Multi-Select
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* Chronic Conditions */}
+          <SearchableMultiSelect
+            label="Chronic Conditions"
+            placeholder="Search e.g. Hypertension, Diabetes, Asthma..."
+            selectedItems={patientInfo.chronicConditions || []}
+            onChange={(items) =>
+              onPatientInfoChange({ ...patientInfo, chronicConditions: items })
+            }
+            options={COMMON_CHRONIC_CONDITIONS}
+            icon={<HeartPulse className="w-3.5 h-3.5 text-rose-400" />}
+            badgeColorClass="bg-rose-950/60 border-rose-500/40 text-rose-300"
+            helperText="Select past medical history or type custom condition."
+          />
+
+          {/* Current Medications */}
+          <SearchableMultiSelect
+            label="Current Medications"
+            placeholder="Search e.g. Metformin, Telmisartan, Inhaler..."
+            selectedItems={patientInfo.currentMedications || []}
+            onChange={(items) =>
+              onPatientInfoChange({ ...patientInfo, currentMedications: items })
+            }
+            options={COMMON_MEDICATIONS}
+            icon={<Pill className="w-3.5 h-3.5 text-cyan-400" />}
+            badgeColorClass="bg-cyan-950/60 border-cyan-500/40 text-cyan-300"
+            helperText="Add active prescriptions or daily maintenance drugs."
           />
         </div>
       </div>

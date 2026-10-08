@@ -2,9 +2,18 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "RapiCure | Pre-OPD Smart Triage & Voice Scribe (AIIMS Jodhpur)",
+  title: "MedAssist AI - Pre-OPD Medical Triage",
   description:
-    "Pre-consultation vernacular medical scribe & smart triage system powered by Gemini 2.0 Flash for Indian OPDs.",
+    "High-volume hospital pre-OPD clinical triage assistant synthesizing bilingual voice complaints, nursing vitals, and lab reports into structured SOAP briefings with risk stratification.",
+  openGraph: {
+    title: "MedAssist AI - Pre-OPD Medical Triage",
+    description:
+      "High-volume hospital pre-OPD clinical triage assistant synthesizing bilingual voice complaints, nursing vitals, and lab reports into structured SOAP briefings with risk stratification.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({

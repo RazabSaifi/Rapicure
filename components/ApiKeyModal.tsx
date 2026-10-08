@@ -87,12 +87,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           </div>
 
           <div className="rounded-xl bg-slate-950/60 border border-slate-800/80 p-3 text-xs text-slate-400 space-y-2">
-            <div className="flex items-center gap-1.5 text-teal-400 font-medium">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Free & Instant with Google AI Studio</span>
+              <span>Server-Side Gemini 2.0 Flash Connected</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              Your API key is stored locally in your browser session only. It connects directly to Gemini 2.0 Flash for instant multimodal triage.
+              RapiCure AI is automatically powered by the Google AI Studio server environment. Adding a personal API key is optional and will override the default server key.
             </p>
             <a
               href="https://aistudio.google.com/app/apikey"
@@ -100,7 +100,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] text-teal-400 hover:text-teal-300 hover:underline font-medium"
             >
-              Get free Gemini API Key <ExternalLink className="w-3 h-3" />
+              Get personal Gemini API Key <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         </div>

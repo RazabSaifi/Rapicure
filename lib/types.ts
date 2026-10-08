@@ -14,6 +14,8 @@ export interface PatientInfo {
   gender: "Male" | "Female" | "Other";
   uhid: string;
   tokenNo: string;
+  chronicConditions?: string[];
+  currentMedications?: string[];
 }
 
 export interface ChatMessage {

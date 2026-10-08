@@ -16,6 +16,8 @@ const INITIAL_PATIENT: PatientInfo = {
   gender: "Male",
   uhid: "",
   tokenNo: "OPD-042",
+  chronicConditions: [],
+  currentMedications: [],
 };
 
 const INITIAL_VITALS: VitalsData = {
@@ -217,7 +219,7 @@ export default function Home() {
         onLoadDengueDemo={handleLoadDengueDemo}
         onReset={handleReset}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        hasApiKey={!!apiKey}
+        hasApiKey={true}
         isLoading={isLoading}
       />
 
@@ -269,9 +271,9 @@ export default function Home() {
       </main>
 
       {/* Footer info */}
-      <footer className="no-print border-t border-slate-900 py-4 text-center text-xs text-slate-600">
+      <footer className="no-print border-t border-slate-900 py-4 text-center text-xs text-slate-500">
         <p>
-          RapiCure AI • Developed for AAYU 2026 AI Medical Innovation Hackathon (DHR, MoHFW, Google for Developers)
+          <strong className="text-teal-400 font-mono">rapicure.ai.studio</strong> • Clinical Pre-OPD Triage Scribe • AAYU 2026 AI Medical Innovation Hackathon (DHR, MoHFW, Google for Developers)
         </p>
       </footer>
 
