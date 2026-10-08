@@ -14,9 +14,12 @@ import {
   HeartPulse,
   CheckCircle2,
   Loader2,
+  AlertCircle,
+  HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { ChatMessage, PatientInfo, VitalsData } from "@/lib/types";
-import { SpeechInputService, SpeechOutputService } from "@/lib/speech";
+import { SpeechInputService, SpeechOutputService, requestMicrophonePermission } from "@/lib/speech";
 import { converseClinicalIntakeWithGemini } from "@/lib/gemini";
 
 interface VoiceConversationStudioProps {
@@ -61,6 +64,8 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const [isThinking, setIsThinking] = useState(false);
   const [interimText, setInterimText] = useState("");
   const [manualInput, setManualInput] = useState("");
+  const [micError, setMicError] = useState<string | null>(null);
+  const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
   const [activeStatus, setActiveStatus] = useState<
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
@@ -68,6 +73,8 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const speechInputRef = useRef<SpeechInputService | null>(null);
   const speechOutputRef = useRef<SpeechOutputService | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const silenceTimerRef = useRef<any>(null);
+  const latestTranscriptRef = useRef<string>("");
 
   const safeHistory = conversationHistory || [];
 
@@ -75,9 +82,25 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     speechInputRef.current = new SpeechInputService();
     speechOutputRef.current = new SpeechOutputService();
 
+    // Check if permission was already granted previously
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((status) => {
+          if (status.state === "granted") {
+            setMicPermissionGranted(true);
+          } else if (status.state === "denied") {
+            setMicPermissionGranted(false);
+            setMicError("Microphone access is blocked in your browser settings.");
+          }
+        })
+        .catch(() => {});
+    }
+
     return () => {
       if (speechInputRef.current) speechInputRef.current.stop();
       if (speechOutputRef.current) speechOutputRef.current.stop();
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
   }, []);
 
@@ -88,32 +111,63 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     }
   }, [safeHistory, interimText, isThinking]);
 
+  // Request Mic Permission explicitly
+  const handleRequestPermission = async (): Promise<boolean> => {
+    setMicError(null);
+    const result = await requestMicrophonePermission();
+    if (result.granted) {
+      setMicPermissionGranted(true);
+      return true;
+    } else {
+      setMicPermissionGranted(false);
+      setMicError(result.error || "Microphone permission was not granted.");
+      return false;
+    }
+  };
+
   // Initial greeting when conversation is started
   const startConversation = async () => {
-    if (safeHistory.length > 0) return;
+    setMicError(null);
+
+    // 1. Trigger the native browser microphone permission popup immediately!
+    const granted = await handleRequestPermission();
+    if (!granted) {
+      return;
+    }
+
+    if (safeHistory.length > 0) {
+      startListening();
+      return;
+    }
 
     setIsThinking(true);
     setActiveStatus("thinking");
 
-    const greeting = await converseClinicalIntakeWithGemini({
-      apiKey,
-      language: selectedLang,
-      conversationHistory: [],
-      patientInput: "",
-      patientInfo,
-      vitals,
-    });
+    try {
+      const greeting = await converseClinicalIntakeWithGemini({
+        apiKey,
+        language: selectedLang,
+        conversationHistory: [],
+        patientInput: "",
+        patientInfo,
+        vitals,
+      });
 
-    const aiMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: "gemini",
-      text: greeting,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
+      const aiMsg: ChatMessage = {
+        id: Date.now().toString(),
+        sender: "gemini",
+        text: greeting,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
 
-    onUpdateHistory([aiMsg]);
-    setIsThinking(false);
-    speakGeminiResponse(greeting);
+      onUpdateHistory([aiMsg]);
+      setIsThinking(false);
+      speakGeminiResponse(greeting);
+    } catch (err: any) {
+      console.error(err);
+      setIsThinking(false);
+      setActiveStatus("idle");
+    }
   };
 
   // Speak Gemini Response aloud via TTS
@@ -139,29 +193,54 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       onError: () => {
         setIsSpeaking(false);
         setActiveStatus("idle");
+        startListening();
       },
     });
   };
 
   // Start Speech Recognition
-  const startListening = () => {
+  const startListening = async () => {
     if (!speechInputRef.current) return;
     if (speechOutputRef.current) speechOutputRef.current.stop();
+    setMicError(null);
+
+    // Ensure permission is granted
+    if (!micPermissionGranted) {
+      const granted = await handleRequestPermission();
+      if (!granted) return;
+    }
 
     setIsListening(true);
     setActiveStatus("listening");
     setInterimText("");
+    latestTranscriptRef.current = "";
 
-    speechInputRef.current.start(
+    const started = await speechInputRef.current.start(
       selectedLang,
       (transcript, isFinal) => {
         setInterimText(transcript);
+        latestTranscriptRef.current = transcript;
+
+        // Reset silence debounce timer
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+
         if (isFinal && transcript.trim().length > 2) {
+          // Final sentence detected by Web Speech API
           handlePatientMessage(transcript.trim());
+        } else if (transcript.trim().length > 2) {
+          // Set a 1.6s silence auto-send timer so users don't have to wait indefinitely
+          silenceTimerRef.current = setTimeout(() => {
+            if (latestTranscriptRef.current.trim().length > 2) {
+              handlePatientMessage(latestTranscriptRef.current.trim());
+            }
+          }, 1600);
         }
       },
       (err) => {
         console.warn("Mic Error:", err);
+        setMicError(err);
         setIsListening(false);
         setActiveStatus("idle");
       },
@@ -170,10 +249,16 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         if (activeStatus === "listening") setActiveStatus("idle");
       }
     );
+
+    if (!started) {
+      setIsListening(false);
+      setActiveStatus("idle");
+    }
   };
 
   // Stop Speech Recognition
   const stopListening = () => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (speechInputRef.current) {
       speechInputRef.current.stop();
     }
@@ -181,13 +266,23 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     setActiveStatus("idle");
   };
 
+  // Manually send what was spoken so far without waiting
+  const sendSpokenTranscriptNow = () => {
+    const textToSend = latestTranscriptRef.current || interimText;
+    if (textToSend.trim()) {
+      handlePatientMessage(textToSend.trim());
+    }
+  };
+
   // Process Patient message -> Gemini reply
   const handlePatientMessage = async (patientText: string) => {
     if (!patientText.trim()) return;
 
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (speechInputRef.current) speechInputRef.current.stop();
     setIsListening(false);
     setInterimText("");
+    latestTranscriptRef.current = "";
     setManualInput("");
 
     const userMsg: ChatMessage = {
@@ -224,7 +319,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       onUpdateHistory([...newHistory, aiMsg]);
       setIsThinking(false);
       speakGeminiResponse(reply);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setIsThinking(false);
       setActiveStatus("idle");
@@ -232,10 +327,10 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   };
 
   const handleFinish = () => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (speechInputRef.current) speechInputRef.current.stop();
     if (speechOutputRef.current) speechOutputRef.current.stop();
 
-    // Compile narrative from patient messages
     const compiledNarrative = safeHistory
       .filter((m) => m.sender === "patient")
       .map((m) => m.text)
@@ -248,30 +343,78 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
   return (
     <div className="space-y-4">
+      {/* Microphone Permission Warning Banner if blocked */}
+      {micError && (
+        <div className="p-3 bg-rose-950/40 border border-rose-500/50 rounded-xl flex items-start gap-3 shadow-lg">
+          <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <p className="font-bold text-rose-300">Microphone Access Notice</p>
+            <p className="text-rose-200/90 leading-relaxed">{micError}</p>
+            <div className="pt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRequestPermission}
+                className="px-2.5 py-1 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-bold text-[11px] shadow transition-all"
+              >
+                Trigger Permission Popup Again
+              </button>
+              <span className="text-[10px] text-slate-400">
+                (Or click the icon next to <code>localhost:3000</code> in address bar)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Visualizer & Status Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 flex flex-col items-center justify-center text-center shadow-2xl">
-        {/* Glowing Orb Animation */}
+        {/* Mic Permission Pill Badge */}
+        <div className="mb-2">
+          {micPermissionGranted ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Microphone Permission Granted
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleRequestPermission}
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            >
+              <Mic className="w-3 h-3 text-amber-400" />
+              Click to Allow Microphone Access
+            </button>
+          )}
+        </div>
+
+        {/* Glowing Interactive Orb */}
         <div className="relative flex items-center justify-center my-2">
-          <div
-            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-500 flex items-center justify-center ${
+          <button
+            type="button"
+            onClick={isListening ? stopListening : startListening}
+            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-500 flex items-center justify-center cursor-pointer ${
               activeStatus === "speaking"
                 ? "bg-gradient-to-tr from-teal-500 via-cyan-400 to-emerald-400 animate-pulse shadow-lg shadow-teal-500/40 scale-110"
                 : activeStatus === "listening"
-                ? "bg-gradient-to-tr from-rose-500 to-amber-500 animate-bounce shadow-lg shadow-rose-500/40 ring-8 ring-rose-500/20"
+                ? "bg-gradient-to-tr from-rose-500 to-amber-500 animate-bounce shadow-lg shadow-rose-500/40 ring-8 ring-rose-500/25 scale-105"
                 : activeStatus === "thinking"
                 ? "bg-gradient-to-tr from-purple-500 to-indigo-500 animate-spin shadow-lg shadow-purple-500/30"
-                : "bg-slate-800 border border-slate-700 shadow-inner"
+                : "bg-slate-800 hover:bg-slate-750 border border-slate-700 shadow-inner"
             }`}
+            title={isListening ? "Click to pause microphone" : "Click to activate microphone"}
           >
             {activeStatus === "speaking" && <Volume2 className="w-8 h-8 text-slate-950 animate-pulse" />}
             {activeStatus === "listening" && <Mic className="w-8 h-8 text-white animate-pulse" />}
             {activeStatus === "thinking" && <Sparkles className="w-8 h-8 text-white" />}
-            {activeStatus === "idle" && <Bot className="w-8 h-8 text-slate-400" />}
-          </div>
+            {activeStatus === "idle" && <Bot className="w-8 h-8 text-teal-400" />}
+          </button>
 
-          {/* Animated sound waves when speaking */}
+          {/* Sound Wave Ripple Effect when active */}
+          {activeStatus === "listening" && (
+            <div className="absolute inset-0 -m-3 rounded-full border-2 border-rose-400/50 animate-ping pointer-events-none" />
+          )}
           {activeStatus === "speaking" && (
-            <div className="absolute inset-0 -m-3 rounded-full border border-teal-400/40 animate-ping pointer-events-none" />
+            <div className="absolute inset-0 -m-3 rounded-full border-2 border-teal-400/50 animate-ping pointer-events-none" />
           )}
         </div>
 
@@ -279,26 +422,47 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         <div className="mt-2 space-y-0.5">
           <h4 className="text-sm font-bold text-white tracking-wide">
             {activeStatus === "speaking" && "🤖 RapiCure AI Speaking..."}
-            {activeStatus === "listening" && "🎤 Listening to Patient..."}
-            {activeStatus === "thinking" && "🧠 RapiCure AI is Analyzing Symptoms..."}
+            {activeStatus === "listening" && "🎤 Listening to You! Please Speak..."}
+            {activeStatus === "thinking" && "🧠 RapiCure AI is Thinking..."}
             {activeStatus === "idle" && (safeHistory.length === 0 ? "RapiCure Voice Consultation Ready" : "Voice Consultation Active")}
           </h4>
           <p className="text-[11px] text-slate-400">
             {activeStatus === "listening"
-              ? selectedLang === "hi-IN" ? "मरीज अपनी समस्या खुलकर बोलें..." : "Please speak your symptoms naturally..."
-              : "Bilingual Clinical Voice Interview (Hindi / English)"}
+              ? selectedLang === "hi-IN" ? "अपनी तकलीफ खुलकर बोलें (हिंदी या अंग्रेजी)..." : "Speak symptoms naturally..."
+              : "Bilingual Clinical Voice Dialogue (Hindi / English)"}
           </p>
         </div>
 
-        {/* Primary Controls */}
+        {/* Live Interim Speech Preview when user is speaking */}
+        {isListening && (
+          <div className="mt-3 w-full max-w-md p-2 rounded-xl bg-slate-950 border border-rose-500/40 text-xs text-rose-200 flex items-center justify-between gap-2 shadow-inner">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+              <span className="truncate italic">
+                {interimText || "Listening for speech..."}
+              </span>
+            </div>
+            {interimText && (
+              <button
+                type="button"
+                onClick={sendSpokenTranscriptNow}
+                className="px-2 py-1 rounded bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-[10px] shrink-0"
+              >
+                Send Now ↵
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Primary Action Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4">
           {safeHistory.length === 0 ? (
             <button
               type="button"
               onClick={startConversation}
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/25 transition-all active:scale-95 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/25 transition-all active:scale-95 flex items-center gap-2"
             >
-              <Sparkles className="w-4 h-4 fill-slate-950" />
+              <Mic className="w-4 h-4 fill-slate-950" />
               <span>Start Voice Consultation</span>
             </button>
           ) : (
@@ -316,10 +480,10 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
                 <button
                   type="button"
                   onClick={startListening}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-500 hover:bg-teal-400 text-slate-950 shadow-lg shadow-teal-500/30 transition-all flex items-center gap-1.5 active:scale-95"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/30 transition-all flex items-center gap-1.5 active:scale-95"
                 >
                   <Mic className="w-4 h-4" />
-                  <span>Speak Reply</span>
+                  <span>Tap to Speak Reply</span>
                 </button>
               )}
 
@@ -327,12 +491,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
                 type="button"
                 onClick={handleFinish}
                 disabled={isLoadingSOAP}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-md transition-all active:scale-95 flex items-center gap-1.5"
               >
                 {isLoadingSOAP ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" />
                 ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
                 )}
                 <span>Finish & Generate SOAP Note</span>
               </button>
@@ -369,6 +533,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 space-y-1">
               <Bot className="w-6 h-6 text-slate-600" />
               <p>Click "Start Voice Consultation" to begin AI audio interview.</p>
+              <p className="text-[10px] text-slate-600">Your browser will ask for microphone permission.</p>
             </div>
           ) : (
             safeHistory.map((msg) => (
@@ -404,15 +569,6 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             ))
           )}
 
-          {/* Interim transcript while user is speaking */}
-          {interimText && (
-            <div className="flex gap-2.5 justify-end">
-              <div className="max-w-[82%] p-2.5 rounded-2xl bg-teal-600/60 text-white border border-teal-400/40 italic animate-pulse">
-                <p className="text-xs">{interimText} ...</p>
-              </div>
-            </div>
-          )}
-
           {/* Thinking indicator */}
           {isThinking && (
             <div className="flex gap-2.5 justify-start">
@@ -421,7 +577,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
               </div>
               <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping" />
-                <span className="text-xs">Thinking response...</span>
+                <span className="text-xs">RapiCure is thinking response...</span>
               </div>
             </div>
           )}
@@ -447,7 +603,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         </div>
       </div>
 
-      {/* Optional Manual Text Input if patient prefers typing */}
+      {/* Manual Text Input fallback */}
       <div className="flex items-center gap-2 pt-1">
         <input
           type="text"

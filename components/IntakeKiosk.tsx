@@ -71,7 +71,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
     };
   }, []);
 
-  const toggleRecording = () => {
+  const toggleRecording = async () => {
     if (!speechServiceRef.current) return;
     setRecordingError(null);
 
@@ -87,19 +87,23 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
       setIsRecording(true);
       const initialText = narrativeText ? narrativeText + " " : "";
 
-      speechServiceRef.current.start(
+      const started = await speechServiceRef.current.start(
         selectedLang,
         (transcript, isFinal) => {
           onNarrativeChange(initialText + transcript);
         },
         (error) => {
-          setRecordingError(`Mic Error: ${error}`);
+          setRecordingError(error);
           setIsRecording(false);
         },
         () => {
           setIsRecording(false);
         }
       );
+
+      if (!started) {
+        setIsRecording(false);
+      }
     }
   };
 
