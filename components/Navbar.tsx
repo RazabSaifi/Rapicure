@@ -10,6 +10,7 @@ import {
   Building2,
   Clock,
   CheckCircle2,
+  ExternalLink,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -42,11 +43,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-1">
                 Rapi<span className="text-teal-400 font-extrabold">Cure</span>
+                <span className="text-emerald-400 font-mono text-xs font-semibold">.ai.studio</span>
               </h1>
-              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/20">
-                Pre-OPD Scribe & AI Triage
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/20 font-mono">
+                rapicure.ai.studio
               </span>
             </div>
             <p className="text-[11px] text-slate-400 hidden md:flex items-center gap-1.5">
@@ -77,6 +79,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Zap className="w-3.5 h-3.5 fill-current animate-pulse text-amber-100" />
             <span className="font-bold tracking-wide">⚡ Load Dengue Demo</span>
+          </button>
+
+          {/* Open in Full Window / Tab Button */}
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.open(window.location.href, "_blank");
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/50 transition-colors"
+            title="Open app in a full browser tab for full native microphone permissions"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-teal-400" />
+            <span className="hidden md:inline">Open in Tab</span>
           </button>
 
           {/* Reset Button */}

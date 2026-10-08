@@ -1,8 +1,8 @@
 /**
  * Live Audio Client Service for Gemini 3.8 Live API
- * Handles 16kHz microphone capture (when permitted), PCM conversion, WebSocket streaming,
- * and 24kHz gapless playback with visualizer metrics.
- * Gracefully degrades if microphone permission is denied or blocked.
+ * Direct Full-Duplex Audio Streaming (Gemini App Experience)
+ * Handles microphone capture, 16kHz PCM streaming, gapless 24kHz audio playback,
+ * and real-time audio visualization.
  */
 
 export interface LiveAudioCallbacks {
@@ -11,7 +11,9 @@ export interface LiveAudioCallbacks {
     message?: string
   ) => void;
   onMicPermissionChange?: (hasMic: boolean, notice?: string) => void;
-  onTranscriptAgent?: (text: string) => void;
+  onTranscriptAgentChunk?: (chunk: string) => void;
+  onTranscriptAgentTurnComplete?: (fullText: string) => void;
+  onTranscriptUserSpeech?: (text: string) => void;
   onTranscriptUser?: (text: string) => void;
   onAudioLevelChange?: (inputLevel: number, outputLevel: number) => void;
   onError?: (error: string) => void;
@@ -37,6 +39,41 @@ export interface LiveInitConfig {
   };
 }
 
+/** Downsamples Float32 audio to 16000Hz Int16 PCM Little-Endian */
+function downsampleTo16k(input: Float32Array, inputSampleRate: number): Int16Array {
+  if (inputSampleRate === 16000) {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return output;
+  }
+
+  const ratio = inputSampleRate / 16000;
+  const newLength = Math.floor(input.length / ratio);
+  const output = new Int16Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const originalIndex = Math.min(Math.floor(i * ratio), input.length - 1);
+    const s = Math.max(-1, Math.min(1, input[originalIndex]));
+    output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return output;
+}
+
+/** Fast binary to base64 conversion without char-by-char string concatenation GC pauses */
+function pcmToBase64(pcm16: Int16Array): string {
+  const bytes = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
+  let binary = "";
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
 export class GeminiLiveClient {
   private ws: WebSocket | null = null;
   private inputAudioCtx: AudioContext | null = null;
@@ -51,6 +88,9 @@ export class GeminiLiveClient {
   private isMuted: boolean = false;
   private isConnected: boolean = false;
   private hasMicAccess: boolean = false;
+  private currentAgentTurnText: string = "";
+  private isUserSpeaking: boolean = false;
+  private speechPauseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(callbacks: LiveAudioCallbacks) {
     this.callbacks = callbacks;
@@ -58,20 +98,33 @@ export class GeminiLiveClient {
 
   public async start(config: LiveInitConfig): Promise<void> {
     try {
-      this.callbacks.onStatusChange?.("connecting", "Connecting to Gemini 3.8 Live...");
+      this.callbacks.onStatusChange?.("connecting", "Connecting to Gemini Live...");
+      this.currentAgentTurnText = "";
 
-      // 1. Setup Output AudioContext (always enabled for model speech playback)
+      // 1. Setup Output AudioContext (standard default hardware rate for universal device compatibility)
       const AudioCtxClass =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
-      this.outputAudioCtx = new AudioCtxClass({ sampleRate: 24000 });
+      this.outputAudioCtx = new AudioCtxClass();
       if (this.outputAudioCtx.state === "suspended") {
         await this.outputAudioCtx.resume();
       }
+
+      // Unlock browser audio
+      try {
+        const unlock = this.outputAudioCtx.createBuffer(1, 1, 22050);
+        const src = this.outputAudioCtx.createBufferSource();
+        src.buffer = unlock;
+        src.connect(this.outputAudioCtx.destination);
+        src.start(0);
+      } catch (e) {
+        // ignore
+      }
+
       this.nextStartTime = this.outputAudioCtx.currentTime;
 
-      // 2. Attempt Mic Capture (Gracefully handled if permission denied)
+      // 2. Setup Mic Capture (Hardware adaptive sample rate with 16kHz downsampling)
       await this.tryAcquireMicrophone(AudioCtxClass);
 
       // 3. Connect WebSocket to Gemini Live backend
@@ -105,7 +158,7 @@ export class GeminiLiveClient {
 
       this.ws.onerror = (err) => {
         console.error("Live WebSocket error:", err);
-        this.callbacks.onError?.("WebSocket connection to Gemini 3.8 Live failed.");
+        this.callbacks.onError?.("Live connection failed. Retrying...");
         this.callbacks.onStatusChange?.("error", "Connection error");
       };
 
@@ -135,62 +188,71 @@ export class GeminiLiveClient {
         this.hasMicAccess = false;
         this.callbacks.onMicPermissionChange?.(
           false,
-          "Microphone API is not supported in this browser context. You can use text/chips to converse."
+          "Microphone is not available in this browser. Please use Chrome or Edge."
         );
         return false;
       }
 
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      // Request mic stream with permissive audio constraint
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      this.inputAudioCtx = new AudioCtxClass({ sampleRate: 16000 });
+      // Native AudioContext for input capture
+      this.inputAudioCtx = new AudioCtxClass();
       if (this.inputAudioCtx.state === "suspended") {
         await this.inputAudioCtx.resume();
       }
 
+      const hardwareSampleRate = this.inputAudioCtx.sampleRate;
       this.sourceNode = this.inputAudioCtx.createMediaStreamSource(this.mediaStream);
-      this.scriptProcessor = this.inputAudioCtx.createScriptProcessor(2048, 1, 1);
+      this.scriptProcessor = this.inputAudioCtx.createScriptProcessor(4096, 1, 1);
 
       this.sourceNode.connect(this.scriptProcessor);
-      this.scriptProcessor.connect(this.inputAudioCtx.destination);
+
+      // Connect to a muted gain node to prevent speaker feedback loop
+      const muteGain = this.inputAudioCtx.createGain();
+      muteGain.gain.value = 0;
+      this.scriptProcessor.connect(muteGain);
+      muteGain.connect(this.inputAudioCtx.destination);
 
       this.scriptProcessor.onaudioprocess = (e) => {
-        if (!this.isConnected || this.isMuted) return;
+        if (this.isMuted) return;
 
         const inputChannel = e.inputBuffer.getChannelData(0);
 
-        // Compute volume level for visualizer
+        // Volume level metric for visualizer
         let sum = 0;
         for (let i = 0; i < inputChannel.length; i++) {
           sum += inputChannel[i] * inputChannel[i];
         }
         const rms = Math.sqrt(sum / inputChannel.length);
-        const level = Math.min(100, Math.round(rms * 250));
+        const level = Math.min(100, Math.round(rms * 280));
         this.callbacks.onAudioLevelChange?.(level, 0);
 
-        // Convert Float32 (-1.0 to 1.0) to 16-bit PCM Little Endian
-        const pcm16 = new Int16Array(inputChannel.length);
-        for (let i = 0; i < inputChannel.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputChannel[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        // Fast voice activity & pause detection to eliminate response latency:
+        if (level > 12) {
+          this.isUserSpeaking = true;
+          if (this.speechPauseTimer) {
+            clearTimeout(this.speechPauseTimer);
+            this.speechPauseTimer = null;
+          }
+        } else if (this.isUserSpeaking && level < 8) {
+          // If the patient finished speaking and pauses for 550ms:
+          if (!this.speechPauseTimer) {
+            this.speechPauseTimer = setTimeout(() => {
+              if (this.isUserSpeaking) {
+                this.isUserSpeaking = false;
+                this.sendAudioStreamEnd();
+              }
+              this.speechPauseTimer = null;
+            }, 550);
+          }
         }
 
-        // Base64 encode
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = "";
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        // Downsample to 16kHz PCM Little-Endian
+        const pcm16 = downsampleTo16k(inputChannel, hardwareSampleRate);
+        const base64 = pcmToBase64(pcm16);
 
+        // Stream audio chunk directly to Gemini Live backend
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: "audio", audio: base64 }));
         }
@@ -200,11 +262,11 @@ export class GeminiLiveClient {
       this.callbacks.onMicPermissionChange?.(true);
       return true;
     } catch (micErr: unknown) {
-      console.warn("Microphone access denied or unavailable; continuing in text-to-voice mode:", micErr);
+      console.warn("Microphone access could not be acquired:", micErr);
       this.hasMicAccess = false;
       this.callbacks.onMicPermissionChange?.(
         false,
-        "Microphone permission not granted. Interactive text-to-speech mode enabled: Gemini 3.8 Live will still speak aloud in real-time, and you can reply using symptom chips or typing!"
+        "Microphone continuous stream is resting. You can speak via in-app voice, quick chips, or text."
       );
       return false;
     }
@@ -222,12 +284,9 @@ export class GeminiLiveClient {
       case "status":
         if (msg.status === "ready") {
           this.isConnected = true;
-          const statusText = this.hasMicAccess
-            ? "Gemini 3.8 Live connected (Voice Active)"
-            : "Gemini 3.8 Live connected (Text-to-Voice Mode)";
-          this.callbacks.onStatusChange?.("ready", statusText);
+          this.callbacks.onStatusChange?.("ready", "Gemini Live Call Active");
         } else if (msg.status === "connecting") {
-          this.callbacks.onStatusChange?.("connecting", msg.message || "Connecting...");
+          this.callbacks.onStatusChange?.("connecting", msg.message || "Connecting to Gemini Live...");
         } else if (msg.status === "closed" || msg.status === "idle") {
           this.isConnected = false;
           this.callbacks.onStatusChange?.("idle");
@@ -237,31 +296,36 @@ export class GeminiLiveClient {
       case "audio":
         if (msg.audio) {
           this.playAudioChunk(msg.audio);
-          this.callbacks.onStatusChange?.("speaking", "Gemini 3.8 Live speaking");
+          this.callbacks.onStatusChange?.("speaking", "Gemini Live speaking...");
         }
         break;
 
       case "transcript_agent":
         if (msg.text) {
-          this.callbacks.onTranscriptAgent?.(msg.text);
+          this.currentAgentTurnText += msg.text;
+          this.callbacks.onTranscriptAgentChunk?.(msg.text);
+        }
+        break;
+
+      case "transcript_user_speech":
+        if (msg.text) {
+          this.callbacks.onTranscriptUserSpeech?.(msg.text);
         }
         break;
 
       case "interrupted":
         this.stopAllAudio();
         this.callbacks.onInterrupted?.();
-        this.callbacks.onStatusChange?.(
-          "listening",
-          this.hasMicAccess ? "Listening to patient..." : "Ready for next message"
-        );
+        this.callbacks.onStatusChange?.("listening", "Listening (Barge-in active)...");
         break;
 
       case "turn_complete":
+        if (this.currentAgentTurnText.trim()) {
+          this.callbacks.onTranscriptAgentTurnComplete?.(this.currentAgentTurnText.trim());
+          this.currentAgentTurnText = "";
+        }
         this.callbacks.onTurnComplete?.();
-        this.callbacks.onStatusChange?.(
-          "listening",
-          this.hasMicAccess ? "Listening to patient..." : "Ready for next message"
-        );
+        this.callbacks.onStatusChange?.("listening", "Listening to you...");
         break;
 
       case "error":
@@ -275,27 +339,34 @@ export class GeminiLiveClient {
     if (!this.outputAudioCtx) return;
 
     try {
-      const binary = atob(base64Audio);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
+      if (this.outputAudioCtx.state === "suspended") {
+        this.outputAudioCtx.resume();
       }
-      const int16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(int16.length);
 
+      const binary = atob(base64Audio);
+      const length = Math.floor(binary.length / 2);
+      if (length === 0) return;
+
+      const float32 = new Float32Array(length);
       let sum = 0;
-      for (let i = 0; i < int16.length; i++) {
-        const val = int16[i] / 32768.0;
-        float32[i] = val;
-        sum += val * val;
+
+      for (let i = 0; i < length; i++) {
+        const low = binary.charCodeAt(i * 2);
+        const high = binary.charCodeAt(i * 2 + 1);
+        let val = (high << 8) | low;
+        if (val >= 0x8000) val -= 0x10000;
+        const sample = val / 32768.0;
+        float32[i] = sample;
+        sum += sample * sample;
       }
 
       // Model speaking audio level
-      const rms = Math.sqrt(sum / int16.length);
+      const rms = Math.sqrt(sum / length);
       const level = Math.min(100, Math.round(rms * 280));
       this.callbacks.onAudioLevelChange?.(0, level);
 
-      const audioBuffer = this.outputAudioCtx.createBuffer(1, float32.length, 24000);
+      // Web Audio resamples smoothly from 24kHz to hardware rate
+      const audioBuffer = this.outputAudioCtx.createBuffer(1, length, 24000);
       audioBuffer.copyToChannel(float32, 0);
 
       const source = this.outputAudioCtx.createBufferSource();
@@ -304,7 +375,7 @@ export class GeminiLiveClient {
 
       const currentTime = this.outputAudioCtx.currentTime;
       if (this.nextStartTime < currentTime) {
-        this.nextStartTime = currentTime + 0.03;
+        this.nextStartTime = currentTime + 0.02;
       }
 
       source.start(this.nextStartTime);
@@ -330,6 +401,12 @@ export class GeminiLiveClient {
       this.ws.send(JSON.stringify({ type: "text", text }));
       this.callbacks.onTranscriptUser?.(text);
       this.callbacks.onStatusChange?.("listening", "Processing message...");
+    }
+  }
+
+  public sendAudioStreamEnd() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "audio_end" }));
     }
   }
 
@@ -367,56 +444,51 @@ export class GeminiLiveClient {
   public stop() {
     this.isConnected = false;
     this.hasMicAccess = false;
+    if (this.speechPauseTimer) {
+      clearTimeout(this.speechPauseTimer);
+      this.speechPauseTimer = null;
+    }
+    this.isUserSpeaking = false;
     this.stopAllAudio();
 
     if (this.ws) {
       try {
         this.ws.send(JSON.stringify({ type: "close" }));
         this.ws.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.ws = null;
     }
 
     if (this.sourceNode) {
       try {
         this.sourceNode.disconnect();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.sourceNode = null;
     }
 
     if (this.scriptProcessor) {
       try {
         this.scriptProcessor.disconnect();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.scriptProcessor = null;
     }
 
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
+      this.mediaStream.getTracks().forEach((t) => t.stop());
       this.mediaStream = null;
     }
 
     if (this.inputAudioCtx) {
       try {
         this.inputAudioCtx.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.inputAudioCtx = null;
     }
 
     if (this.outputAudioCtx) {
       try {
         this.outputAudioCtx.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.outputAudioCtx = null;
     }
 

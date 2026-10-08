@@ -106,61 +106,121 @@ Please analyze all available data (and any attached lab image) and output the st
 
     contentsParts.push({ text: promptText });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: { parts: contentsParts },
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            priority: {
-              type: Type.STRING,
-              description: "HIGH, MODERATE, or ROUTINE",
-              enum: ["HIGH", "MODERATE", "ROUTINE"],
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: { parts: contentsParts },
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              priority: {
+                type: Type.STRING,
+                description: "HIGH, MODERATE, or ROUTINE",
+                enum: ["HIGH", "MODERATE", "ROUTINE"],
+              },
+              priority_reason: {
+                type: Type.STRING,
+                description: "1-2 sentence clinical justification",
+              },
+              subjective: {
+                type: Type.STRING,
+                description:
+                  "Structured clinical synthesis of history, symptoms, onset, and vernacular translation in medical terminology",
+              },
+              objective: {
+                type: Type.STRING,
+                description:
+                  "Objective vitals review with flagged abnormal values and any extracted lab/report markers",
+              },
+              red_flags: {
+                type: Type.STRING,
+                description: "Immediate life-threatening warning signs for the consulting physician",
+              },
+              doctor_audio_brief: {
+                type: Type.STRING,
+                description: "Spoken 15-second audio briefing script in fluent clinical English",
+              },
+              plan: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description:
+                  "Actionable physician checklist items, STAT tests, medications, and triage destination",
+              },
             },
-            priority_reason: {
-              type: Type.STRING,
-              description: "1-2 sentence clinical justification",
-            },
-            subjective: {
-              type: Type.STRING,
-              description:
-                "Structured clinical synthesis of history, symptoms, onset, and vernacular translation in medical terminology",
-            },
-            objective: {
-              type: Type.STRING,
-              description:
-                "Objective vitals review with flagged abnormal values and any extracted lab/report markers",
-            },
-            red_flags: {
-              type: Type.STRING,
-              description: "Immediate life-threatening warning signs for the consulting physician",
-            },
-            doctor_audio_brief: {
-              type: Type.STRING,
-              description: "Spoken 15-second audio briefing script in fluent clinical English",
-            },
-            plan: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description:
-                "Actionable physician checklist items, STAT tests, medications, and triage destination",
-            },
+            required: [
+              "priority",
+              "priority_reason",
+              "subjective",
+              "objective",
+              "red_flags",
+              "doctor_audio_brief",
+              "plan",
+            ],
           },
-          required: [
-            "priority",
-            "priority_reason",
-            "subjective",
-            "objective",
-            "red_flags",
-            "doctor_audio_brief",
-            "plan",
-          ],
         },
-      },
-    });
+      });
+    } catch (mErr: any) {
+      console.warn("gemini-3.8-flash unavailable, using gemini-3.5-flash for triage:", mErr?.message);
+      response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: { parts: contentsParts },
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              priority: {
+                type: Type.STRING,
+                description: "HIGH, MODERATE, or ROUTINE",
+                enum: ["HIGH", "MODERATE", "ROUTINE"],
+              },
+              priority_reason: {
+                type: Type.STRING,
+                description: "1-2 sentence clinical justification",
+              },
+              subjective: {
+                type: Type.STRING,
+                description:
+                  "Structured clinical synthesis of history, symptoms, onset, and vernacular translation in medical terminology",
+              },
+              objective: {
+                type: Type.STRING,
+                description:
+                  "Objective vitals review with flagged abnormal values and any extracted lab/report markers",
+              },
+              red_flags: {
+                type: Type.STRING,
+                description: "Immediate life-threatening warning signs for the consulting physician",
+              },
+              doctor_audio_brief: {
+                type: Type.STRING,
+                description: "Spoken 15-second audio briefing script in fluent clinical English",
+              },
+              plan: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description:
+                  "Actionable physician checklist items, STAT tests, medications, and triage destination",
+              },
+            },
+            required: [
+              "priority",
+              "priority_reason",
+              "subjective",
+              "objective",
+              "red_flags",
+              "doctor_audio_brief",
+              "plan",
+            ],
+          },
+        },
+      });
+    }
 
     const text = response.text;
     if (!text) {

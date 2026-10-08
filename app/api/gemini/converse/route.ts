@@ -85,14 +85,27 @@ LATEST PATIENT INPUT:
 
 Provide your next spoken clinical response (1-2 short sentences only):`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: promptText,
-      config: {
-        systemInstruction,
-        temperature: 0.2,
-      },
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: promptText,
+        config: {
+          systemInstruction,
+          temperature: 0.2,
+        },
+      });
+    } catch (mErr: any) {
+      console.warn("gemini-3.8-flash unavailable, using gemini-3.5-flash:", mErr?.message);
+      response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: promptText,
+        config: {
+          systemInstruction,
+          temperature: 0.2,
+        },
+      });
+    }
 
     const reply = response.text?.trim() || "";
     return NextResponse.json({ reply });

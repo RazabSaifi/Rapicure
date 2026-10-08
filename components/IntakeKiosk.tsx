@@ -93,10 +93,10 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
 
       speechServiceRef.current.start(
         selectedLang,
-        (transcript, isFinal) => {
+        (transcript: string, isFinal: boolean) => {
           onNarrativeChange(initialText + transcript);
         },
-        (error) => {
+        (error: string) => {
           setRecordingError(`Mic Error: ${error}`);
           setIsRecording(false);
         },
