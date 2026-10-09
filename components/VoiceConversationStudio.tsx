@@ -25,6 +25,7 @@ import { converseClinicalIntakeWithGemini } from "@/lib/gemini";
 
 interface VoiceConversationStudioProps {
   apiKey: string;
+  elevenLabsApiKey?: string;
   selectedLang: "hi-IN" | "en-IN";
   patientInfo: PatientInfo;
   vitals: VitalsData;
@@ -52,6 +53,7 @@ const QUICK_SYMPTOM_CHIPS_EN = [
 
 export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = ({
   apiKey,
+  elevenLabsApiKey = "",
   selectedLang,
   patientInfo,
   vitals,
@@ -68,7 +70,8 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const [micError, setMicError] = useState<string | null>(null);
   const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
   const [selectedVoice, setSelectedVoice] = useState<"Aoede" | "Charon" | "Puck">("Aoede");
-  const [isGeminiNativeVoice, setIsGeminiNativeVoice] = useState(false);
+  const [activeVoiceMode, setActiveVoiceMode] = useState<string>("neural_tts");
+  const [isLiveAIActive, setIsLiveAIActive] = useState<boolean>(false);
   const [activeStatus, setActiveStatus] = useState<
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
@@ -149,6 +152,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     try {
       const result = await converseClinicalIntakeWithGemini({
         apiKey,
+        elevenLabsApiKey,
         language: selectedLang,
         conversationHistory: [],
         patientInput: "",
@@ -160,6 +164,10 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       const greeting = typeof result === "string" ? result : result.reply;
       const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
       const audioBase64 = typeof result === "object" ? result.audioBase64 : undefined;
+      const vMode = typeof result === "object" ? result.voiceMode : "neural_tts";
+      if (typeof result === "object" && result.isLiveAI !== undefined) {
+        setIsLiveAIActive(result.isLiveAI);
+      }
 
       const aiMsg: ChatMessage = {
         id: Date.now().toString(),
@@ -170,7 +178,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       onUpdateHistory([aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(greeting, spokenRomaji, audioBase64);
+      speakGeminiResponse(greeting, spokenRomaji, audioBase64, vMode);
     } catch (err: any) {
       console.error(err);
       setIsThinking(false);
@@ -182,13 +190,14 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const speakGeminiResponse = (
     text: string,
     spokenRomaji?: string,
-    audioBase64?: string | null
+    audioBase64?: string | null,
+    voiceMode = "neural_tts"
   ) => {
     if (!speechOutputRef.current) return;
 
     setIsSpeaking(true);
     setActiveStatus("speaking");
-    setIsGeminiNativeVoice(!!audioBase64);
+    setActiveVoiceMode(voiceMode);
 
     speechOutputRef.current.speak(text, {
       rate: selectedLang === "hi-IN" ? 0.95 : 1.0,
@@ -242,15 +251,15 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         }
 
         if (isFinal && transcript.trim().length > 2) {
-          // Final sentence detected by Web Speech API
+          // Final sentence detected by Web Speech API: trigger immediately!
           handlePatientMessage(transcript.trim());
         } else if (transcript.trim().length > 2) {
-          // Auto-send after 1.6s pause
+          // Auto-send after 800ms natural pause (fast and responsive!)
           silenceTimerRef.current = setTimeout(() => {
             if (latestTranscriptRef.current.trim().length > 2) {
               handlePatientMessage(latestTranscriptRef.current.trim());
             }
-          }, 1600);
+          }, 800);
         }
       },
       (err) => {
@@ -317,6 +326,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     try {
       const result = await converseClinicalIntakeWithGemini({
         apiKey,
+        elevenLabsApiKey,
         language: selectedLang,
         conversationHistory: newHistory,
         patientInput: patientText,
@@ -328,6 +338,10 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       const replyText = typeof result === "string" ? result : result.reply;
       const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
       const audioBase64 = typeof result === "object" ? result.audioBase64 : undefined;
+      const vMode = typeof result === "object" ? result.voiceMode : "neural_tts";
+      if (typeof result === "object" && result.isLiveAI !== undefined) {
+        setIsLiveAIActive(result.isLiveAI);
+      }
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -338,7 +352,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       onUpdateHistory([...newHistory, aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(replyText, spokenRomaji, audioBase64);
+      speakGeminiResponse(replyText, spokenRomaji, audioBase64, vMode);
     } catch (e: any) {
       console.error(e);
       setIsThinking(false);
@@ -450,10 +464,29 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             </button>
           )}
 
-          {isGeminiNativeVoice && activeStatus === "speaking" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+          {activeVoiceMode === "elevenlabs_studio" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40 shadow-sm animate-pulse">
               <Sparkles className="w-3 h-3 text-purple-400" />
+              ElevenLabs Studio Voice
+            </span>
+          )}
+
+          {activeVoiceMode === "gemini_native" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse">
+              <Sparkles className="w-3 h-3 text-teal-400" />
               Gemini 2.0 Human Voice
+            </span>
+          )}
+
+          {apiKey ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Live Gemini 2.0 Brain
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-300/90 border border-amber-500/25">
+              <Bot className="w-3 h-3 text-amber-400" />
+              Smart Triage Assistant
             </span>
           )}
 

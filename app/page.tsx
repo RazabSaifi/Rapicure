@@ -30,6 +30,7 @@ const INITIAL_VITALS: VitalsData = {
 
 export default function Home() {
   const [apiKey, setApiKey] = useState<string>("");
+  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(INITIAL_PATIENT);
   const [vitals, setVitals] = useState<VitalsData>(INITIAL_VITALS);
@@ -42,12 +43,16 @@ export default function Home() {
   const [loadingStepText, setLoadingStepText] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load API Key from localStorage on mount
+  // Load API Keys from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedKey = localStorage.getItem("rapicure_gemini_api_key");
       if (savedKey) {
         setApiKey(savedKey);
+      }
+      const savedEleven = localStorage.getItem("rapicure_elevenlabs_api_key");
+      if (savedEleven) {
+        setElevenLabsApiKey(savedEleven);
       }
     }
   }, []);
@@ -57,7 +62,15 @@ export default function Home() {
     if (typeof window !== "undefined") {
       localStorage.setItem("rapicure_gemini_api_key", key);
     }
-    showToast(key ? "Gemini API key saved for RapiCure!" : "API key cleared");
+    showToast(key ? "Gemini API key saved for RapiCure!" : "Gemini API key cleared");
+  };
+
+  const handleSaveElevenLabsKey = (key: string) => {
+    setElevenLabsApiKey(key);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rapicure_elevenlabs_api_key", key);
+    }
+    showToast(key ? "ElevenLabs API key connected for Studio Voice!" : "ElevenLabs key cleared");
   };
 
   const showToast = (msg: string) => {
@@ -219,7 +232,7 @@ export default function Home() {
         onLoadDengueDemo={handleLoadDengueDemo}
         onReset={handleReset}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        hasApiKey={true}
+        hasApiKey={!!apiKey || !!elevenLabsApiKey}
         isLoading={isLoading}
       />
 
@@ -243,6 +256,7 @@ export default function Home() {
           <div className="lg:col-span-6 xl:col-span-5">
             <IntakeKiosk
               apiKey={apiKey}
+              elevenLabsApiKey={elevenLabsApiKey}
               patientInfo={patientInfo}
               onPatientInfoChange={setPatientInfo}
               vitals={vitals}
@@ -283,6 +297,8 @@ export default function Home() {
         onClose={() => setIsApiKeyModalOpen(false)}
         apiKey={apiKey}
         onSaveKey={handleSaveApiKey}
+        elevenLabsApiKey={elevenLabsApiKey}
+        onSaveElevenLabsKey={handleSaveElevenLabsKey}
       />
 
       {/* Toast Notification */}

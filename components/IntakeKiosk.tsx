@@ -28,6 +28,7 @@ import { COMMON_CHRONIC_CONDITIONS, COMMON_MEDICATIONS } from "@/lib/clinicalOpt
 
 interface IntakeKioskProps {
   apiKey: string;
+  elevenLabsApiKey?: string;
   patientInfo: PatientInfo;
   onPatientInfoChange: (info: PatientInfo) => void;
   vitals: VitalsData;
@@ -45,6 +46,7 @@ interface IntakeKioskProps {
 
 export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
   apiKey,
+  elevenLabsApiKey,
   patientInfo,
   onPatientInfoChange,
   vitals,
@@ -322,6 +324,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
       {intakeMode === "conversational" ? (
         <VoiceConversationStudio
           apiKey={apiKey}
+          elevenLabsApiKey={elevenLabsApiKey}
           selectedLang={selectedLang}
           patientInfo={patientInfo}
           vitals={vitals}

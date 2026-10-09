@@ -7,6 +7,7 @@ import { DEMO_CASES } from "./demoData";
  */
 export async function converseClinicalIntakeWithGemini(params: {
   apiKey?: string;
+  elevenLabsApiKey?: string;
   language: "hi-IN" | "en-IN";
   conversationHistory: ChatMessage[];
   patientInput: string;
@@ -18,9 +19,11 @@ export async function converseClinicalIntakeWithGemini(params: {
   spokenRomaji?: string;
   audioBase64?: string | null;
   voiceMode?: string;
+  isLiveAI?: boolean;
 }> {
   const {
     apiKey,
+    elevenLabsApiKey,
     language,
     conversationHistory = [],
     patientInput,
@@ -35,6 +38,7 @@ export async function converseClinicalIntakeWithGemini(params: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         apiKey,
+        elevenLabsApiKey,
         language,
         conversationHistory,
         patientInput,
@@ -58,6 +62,7 @@ export async function converseClinicalIntakeWithGemini(params: {
       spokenRomaji: data.spokenRomaji || data.reply,
       audioBase64: data.audioBase64 || null,
       voiceMode: data.voiceMode || "neural_tts",
+      isLiveAI: data.isLiveAI ?? false,
     };
   } catch (error) {
     console.warn("Converse API error, utilizing clinical fallback:", error);
