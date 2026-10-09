@@ -4,7 +4,7 @@ const next = require("next");
 const { WebSocketServer } = require("ws");
 const { GoogleGenAI, Modality } = require("@google/genai");
 
-const port = 3000;
+const port = parseInt(process.env.PORT || "3000", 10);
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev, hostname: "0.0.0.0", port });
 const handle = app.getRequestHandler();

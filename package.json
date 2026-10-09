@@ -1,12 +1,12 @@
 {
-  "name": "medassist-ai-rapicure",
+  "name": "rapicure",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:live": "node server.js",
+    "dev": "node server.js",
+    "dev:next": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
