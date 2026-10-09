@@ -12,7 +12,7 @@ export async function converseClinicalIntakeWithGemini(params: {
   patientInput: string;
   patientInfo?: PatientInfo;
   vitals?: VitalsData;
-}): Promise<string> {
+}): Promise<{ reply: string; spokenRomaji?: string }> {
   const { apiKey, language, conversationHistory = [], patientInput, patientInfo, vitals } = params;
 
   try {
@@ -34,21 +34,38 @@ export async function converseClinicalIntakeWithGemini(params: {
     }
 
     const data = await res.json();
-    return data.reply || (language === "hi-IN"
-      ? "मैं समझ गया। कृपया बताएं कि क्या आपको पेट में दर्द या चक्कर भी आ रहे हैं?"
-      : "I understand. Are you experiencing any dizziness or severe discomfort?");
+    return {
+      reply:
+        data.reply ||
+        (language === "hi-IN"
+          ? "मैं समझ गया। कृपया बताएं कि क्या आपको पेट में दर्द या चक्कर भी आ रहे हैं?"
+          : "I understand. Are you experiencing any dizziness or severe discomfort?"),
+      spokenRomaji: data.spokenRomaji || data.reply,
+    };
   } catch (error) {
     console.warn("Converse API error, utilizing clinical fallback:", error);
     if (language === "hi-IN") {
       if (conversationHistory.length === 0) {
-        return "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है और यह कब से शुरू हुई?";
+        return {
+          reply: "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है?",
+          spokenRomaji: "Namaste! Main RapiCure AI hoon. Kripya batayein ki aapko kya takleef ho rahi hai?",
+        };
       }
-      return "क्या आपको बुखार के साथ ठंड या कंपकंपी लग रही है, और क्या सिर में या आँखों के पीछे दर्द है?";
+      return {
+        reply: "क्या आपको बुखार या दर्द के साथ चक्कर, उल्टी या सांस लेने में परेशानी महसूस हो रही है?",
+        spokenRomaji: "Kya aapko bukhar ya dard ke saath chakkar, ulti ya saans lene mein pareshani mehsoos ho rahi hai?",
+      };
     } else {
       if (conversationHistory.length === 0) {
-        return "Hello! I am RapiCure AI. Please tell me what symptoms you are experiencing and since when?";
+        return {
+          reply: "Hello! I am RapiCure AI. Please describe your symptoms and when they started.",
+          spokenRomaji: "Hello! I am RapiCure AI. Please describe your symptoms and when they started.",
+        };
       }
-      return "I understand. Are you also experiencing any severe pain, chills, vomiting, or dizziness?";
+      return {
+        reply: "I understand. Are you experiencing any severe dizziness, vomiting, or difficulty breathing?",
+        spokenRomaji: "I understand. Are you experiencing any severe dizziness, vomiting, or difficulty breathing?",
+      };
     }
   }
 }

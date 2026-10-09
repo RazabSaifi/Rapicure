@@ -16,7 +16,12 @@ export async function POST(req: NextRequest) {
       apiKey: clientKey,
     } = body;
 
-    const apiKey = clientKey || process.env.GEMINI_API_KEY;
+    const apiKey =
+      clientKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY;
 
     // Clinical rule-based fallback if no key or transient error
     if (!apiKey) {
@@ -109,7 +114,7 @@ Please analyze all available data (and any attached lab image) and output the st
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.0-flash",
         contents: { parts: contentsParts },
         config: {
           systemInstruction,
@@ -164,9 +169,9 @@ Please analyze all available data (and any attached lab image) and output the st
         },
       });
     } catch (mErr: any) {
-      console.warn("gemini-3.8-flash unavailable, using gemini-3.5-flash for triage:", mErr?.message);
+      console.warn("gemini-2.0-flash error, trying gemini-1.5-flash for triage:", mErr?.message);
       response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: { parts: contentsParts },
         config: {
           systemInstruction,

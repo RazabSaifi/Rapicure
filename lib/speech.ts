@@ -219,10 +219,90 @@ export class SpeechInputService {
 
 /**
  * Text to Speech (SpeechSynthesis) Helper for Voice Dialogue and Doctor Audio Briefing
+ * Supports authentic Hindi / Indian English voices with robust playback error recovery.
  */
 export class SpeechOutputService {
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private endTimeout: any = null;
+  private voices: SpeechSynthesisVoice[] = [];
+
+  constructor() {
+    this.initVoices();
+  }
+
+  private initVoices() {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      this.voices = window.speechSynthesis.getVoices();
+      if (!this.voices.length) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.voices = window.speechSynthesis.getVoices();
+        };
+      }
+    }
+  }
+
+  public getAvailableVoices(): SpeechSynthesisVoice[] {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const v = window.speechSynthesis.getVoices();
+      if (v.length > 0) {
+        this.voices = v;
+      }
+    }
+    return this.voices;
+  }
+
+  public findBestVoice(lang: "hi-IN" | "en-IN" | "en-US" | string): {
+    voice: SpeechSynthesisVoice | null;
+    isNativeHindi: boolean;
+  } {
+    const allVoices = this.getAvailableVoices();
+    if (lang === "hi-IN") {
+      // 1. Exact or prefix match for Hindi voice
+      const hiVoice = allVoices.find(
+        (v) =>
+          v.lang.toLowerCase().startsWith("hi") ||
+          v.name.toLowerCase().includes("hindi") ||
+          v.name.toLowerCase().includes("swara") ||
+          v.name.toLowerCase().includes("madhur") ||
+          v.name.toLowerCase().includes("kavya")
+      );
+      if (hiVoice) {
+        return { voice: hiVoice, isNativeHindi: true };
+      }
+
+      // 2. Fallback to Indian English (en-IN) voice
+      const indianVoice = allVoices.find(
+        (v) =>
+          v.lang.toLowerCase().includes("en-in") ||
+          v.name.toLowerCase().includes("india") ||
+          v.name.toLowerCase().includes("heera") ||
+          v.name.toLowerCase().includes("ravi") ||
+          v.name.toLowerCase().includes("neerja")
+      );
+      if (indianVoice) {
+        return { voice: indianVoice, isNativeHindi: false };
+      }
+
+      // 3. Fallback to first available voice
+      return { voice: allVoices[0] || null, isNativeHindi: false };
+    } else {
+      // English voice
+      const enInVoice = allVoices.find(
+        (v) =>
+          v.lang.toLowerCase().includes("en-in") ||
+          v.name.toLowerCase().includes("india")
+      );
+      if (enInVoice) return { voice: enInVoice, isNativeHindi: false };
+
+      const enVoice = allVoices.find(
+        (v) =>
+          v.lang.toLowerCase().startsWith("en") ||
+          v.name.toLowerCase().includes("natural") ||
+          v.name.toLowerCase().includes("google")
+      );
+      return { voice: enVoice || allVoices[0] || null, isNativeHindi: false };
+    }
+  }
 
   public isSupported(): boolean {
     return typeof window !== "undefined" && "speechSynthesis" in window;
@@ -234,6 +314,7 @@ export class SpeechOutputService {
       rate?: number;
       pitch?: number;
       lang?: string;
+      spokenRomajiFallback?: string;
       onStart?: () => void;
       onEnd?: () => void;
       onError?: (err: any) => void;
@@ -247,10 +328,26 @@ export class SpeechOutputService {
     this.stop();
 
     const win = window as unknown as IWindow;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = options?.rate || (options?.lang === "hi-IN" ? 1.0 : 1.05);
+    const requestedLang = options?.lang || "en-US";
+    const { voice, isNativeHindi } = this.findBestVoice(requestedLang);
+
+    // If Hindi is requested but system lacks a native Hindi voice (common on Windows English editions),
+    // use phonetic Romanized Hindi fallback so speech audio plays aloud instead of erroring silently!
+    let textToSpeak = text;
+    if (requestedLang === "hi-IN" && !isNativeHindi && options?.spokenRomajiFallback) {
+      textToSpeak = options.spokenRomajiFallback;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    } else {
+      utterance.lang = requestedLang;
+    }
+
+    utterance.rate = options?.rate || (requestedLang === "hi-IN" ? 0.95 : 1.0);
     utterance.pitch = options?.pitch || 1.0;
-    utterance.lang = options?.lang || "en-US";
 
     let hasEnded = false;
     const handleEnd = () => {
@@ -279,7 +376,8 @@ export class SpeechOutputService {
     this.currentUtterance = utterance;
 
     // Safety fallback timeout in case browser never fires onend
-    const estimatedDuration = Math.max(2500, text.split(/\s+/).length * 400 + 1000);
+    const wordCount = textToSpeak.split(/\s+/).length;
+    const estimatedDuration = Math.max(3000, wordCount * 500 + 1500);
     this.endTimeout = setTimeout(() => {
       if (!hasEnded && window.speechSynthesis.speaking) {
         console.warn("Speech synthesis timeout safety triggered");

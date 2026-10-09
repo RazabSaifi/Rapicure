@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MedAssist AI - Pre-OPD Medical Triage",
+  title: "RapiCure AI - Pre-OPD Medical Triage & Voice Scribe",
   description:
     "High-volume hospital pre-OPD clinical triage assistant synthesizing bilingual voice complaints, nursing vitals, and lab reports into structured SOAP briefings with risk stratification.",
   openGraph: {
-    title: "MedAssist AI - Pre-OPD Medical Triage",
+    title: "RapiCure AI - Pre-OPD Medical Triage & Voice Scribe",
     description:
       "High-volume hospital pre-OPD clinical triage assistant synthesizing bilingual voice complaints, nursing vitals, and lab reports into structured SOAP briefings with risk stratification.",
     type: "website",

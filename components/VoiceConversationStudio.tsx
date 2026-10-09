@@ -145,7 +145,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     setActiveStatus("thinking");
 
     try {
-      const greeting = await converseClinicalIntakeWithGemini({
+      const result = await converseClinicalIntakeWithGemini({
         apiKey,
         language: selectedLang,
         conversationHistory: [],
@@ -153,6 +153,9 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         patientInfo,
         vitals,
       });
+
+      const greeting = typeof result === "string" ? result : result.reply;
+      const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
 
       const aiMsg: ChatMessage = {
         id: Date.now().toString(),
@@ -163,7 +166,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       onUpdateHistory([aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(greeting);
+      speakGeminiResponse(greeting, spokenRomaji);
     } catch (err: any) {
       console.error(err);
       setIsThinking(false);
@@ -172,15 +175,16 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   };
 
   // Speak Gemini Response aloud via TTS
-  const speakGeminiResponse = (text: string) => {
+  const speakGeminiResponse = (text: string, spokenRomaji?: string) => {
     if (!speechOutputRef.current) return;
 
     setIsSpeaking(true);
     setActiveStatus("speaking");
 
     speechOutputRef.current.speak(text, {
-      rate: selectedLang === "hi-IN" ? 1.0 : 1.05,
+      rate: selectedLang === "hi-IN" ? 0.95 : 1.05,
       lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
+      spokenRomajiFallback: spokenRomaji,
       onStart: () => {
         setIsSpeaking(true);
         setActiveStatus("speaking");
@@ -301,7 +305,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     setActiveStatus("thinking");
 
     try {
-      const reply = await converseClinicalIntakeWithGemini({
+      const result = await converseClinicalIntakeWithGemini({
         apiKey,
         language: selectedLang,
         conversationHistory: newHistory,
@@ -310,16 +314,19 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         vitals,
       });
 
+      const replyText = typeof result === "string" ? result : result.reply;
+      const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
+
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: "gemini",
-        text: reply,
+        text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
       onUpdateHistory([...newHistory, aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(reply);
+      speakGeminiResponse(replyText, spokenRomaji);
     } catch (e: any) {
       console.error(e);
       setIsThinking(false);
@@ -369,12 +376,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       {/* Visualizer & Status Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 flex flex-col items-center justify-center text-center shadow-2xl">
-        {/* Mic Permission Status Pill */}
-        <div className="mb-2">
+        {/* Mic Permission Status Pill & Sound Test */}
+        <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
           {micPermissionGranted ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Microphone Permission Granted
+              Microphone Ready
             </span>
           ) : (
             <button
@@ -383,9 +390,34 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
               className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
             >
               <Mic className="w-3 h-3 text-amber-400" />
-              Click to Allow Microphone Access
+              Click to Allow Microphone
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (speechOutputRef.current) {
+                const testHi = "नमस्ते! रापिक्योर एआई ऑडियो सिस्टम चालू है।";
+                const testEn = "Hello! RapiCure AI voice system is working properly.";
+                speechOutputRef.current.speak(
+                  selectedLang === "hi-IN" ? testHi : testEn,
+                  {
+                    lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
+                    spokenRomajiFallback:
+                      selectedLang === "hi-IN"
+                        ? "Namaste! RapiCure AI audio system chalu hai."
+                        : testEn,
+                  }
+                );
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition-colors active:scale-95"
+            title="Click to test browser speaker voice output"
+          >
+            <Volume2 className="w-3 h-3 text-teal-400" />
+            <span>Test Sound 🔊</span>
+          </button>
         </div>
 
         {/* Glowing Interactive Orb */}

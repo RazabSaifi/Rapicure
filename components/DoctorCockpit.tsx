@@ -90,7 +90,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({
         : "None reported";
 
     const text = `
-=== MEDASSIST AI CLINICAL BRIEF ===
+=== RAPICURE AI CLINICAL BRIEF ===
 Patient: ${triageResult.patientInfo.name} (${triageResult.patientInfo.age}y/${triageResult.patientInfo.gender}) | Token: ${triageResult.patientInfo.tokenNo}
 Priority: ${triageResult.priority} (${triageResult.priority_reason})
 Chronic Conditions: ${chronicStr}
