@@ -67,6 +67,8 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const [manualInput, setManualInput] = useState("");
   const [micError, setMicError] = useState<string | null>(null);
   const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState<"Aoede" | "Charon" | "Puck">("Aoede");
+  const [isGeminiNativeVoice, setIsGeminiNativeVoice] = useState(false);
   const [activeStatus, setActiveStatus] = useState<
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
@@ -152,10 +154,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         patientInput: "",
         patientInfo,
         vitals,
+        voiceName: selectedVoice,
       });
 
       const greeting = typeof result === "string" ? result : result.reply;
       const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
+      const audioBase64 = typeof result === "object" ? result.audioBase64 : undefined;
 
       const aiMsg: ChatMessage = {
         id: Date.now().toString(),
@@ -166,7 +170,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       onUpdateHistory([aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(greeting, spokenRomaji);
+      speakGeminiResponse(greeting, spokenRomaji, audioBase64);
     } catch (err: any) {
       console.error(err);
       setIsThinking(false);
@@ -174,17 +178,23 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     }
   };
 
-  // Speak Gemini Response aloud via TTS
-  const speakGeminiResponse = (text: string, spokenRomaji?: string) => {
+  // Speak Gemini Response aloud via Real Gemini Audio or Natural Voice
+  const speakGeminiResponse = (
+    text: string,
+    spokenRomaji?: string,
+    audioBase64?: string | null
+  ) => {
     if (!speechOutputRef.current) return;
 
     setIsSpeaking(true);
     setActiveStatus("speaking");
+    setIsGeminiNativeVoice(!!audioBase64);
 
     speechOutputRef.current.speak(text, {
-      rate: selectedLang === "hi-IN" ? 0.95 : 1.05,
+      rate: selectedLang === "hi-IN" ? 0.95 : 1.0,
       lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
       spokenRomajiFallback: spokenRomaji,
+      audioBase64: audioBase64 || null,
       onStart: () => {
         setIsSpeaking(true);
         setActiveStatus("speaking");
@@ -312,10 +322,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         patientInput: patientText,
         patientInfo,
         vitals,
+        voiceName: selectedVoice,
       });
 
       const replyText = typeof result === "string" ? result : result.reply;
       const spokenRomaji = typeof result === "object" ? result.spokenRomaji : undefined;
+      const audioBase64 = typeof result === "object" ? result.audioBase64 : undefined;
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -326,7 +338,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       onUpdateHistory([...newHistory, aiMsg]);
       setIsThinking(false);
-      speakGeminiResponse(replyText, spokenRomaji);
+      speakGeminiResponse(replyText, spokenRomaji, audioBase64);
     } catch (e: any) {
       console.error(e);
       setIsThinking(false);
@@ -376,7 +388,51 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
       {/* Visualizer & Status Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 flex flex-col items-center justify-center text-center shadow-2xl">
-        {/* Mic Permission Status Pill & Sound Test */}
+        {/* Gemini AI Voice Persona Selector */}
+        <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5 p-1 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-slate-400 px-1.5 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-teal-400" />
+            <span>Voice Model:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedVoice("Aoede")}
+            className={`px-2.5 py-0.5 rounded-lg font-semibold transition-all active:scale-95 ${
+              selectedVoice === "Aoede"
+                ? "bg-teal-500 text-slate-950 shadow-sm font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+            }`}
+            title="Aoede: Warm, empathetic female Gemini AI voice"
+          >
+            Aoede (Warm AI)
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedVoice("Charon")}
+            className={`px-2.5 py-0.5 rounded-lg font-semibold transition-all active:scale-95 ${
+              selectedVoice === "Charon"
+                ? "bg-teal-500 text-slate-950 shadow-sm font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+            }`}
+            title="Charon: Calm, deep clinical doctor voice"
+          >
+            Charon (Doctor AI)
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedVoice("Puck")}
+            className={`px-2.5 py-0.5 rounded-lg font-semibold transition-all active:scale-95 ${
+              selectedVoice === "Puck"
+                ? "bg-teal-500 text-slate-950 shadow-sm font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+            }`}
+            title="Puck: Friendly, upbeat male assistant voice"
+          >
+            Puck (Friendly)
+          </button>
+        </div>
+
+        {/* Mic Status & Sound Controls */}
         <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
           {micPermissionGranted ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -394,26 +450,33 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             </button>
           )}
 
+          {isGeminiNativeVoice && activeStatus === "speaking" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+              <Sparkles className="w-3 h-3 text-purple-400" />
+              Gemini 2.0 Human Voice
+            </span>
+          )}
+
           <button
             type="button"
             onClick={() => {
               if (speechOutputRef.current) {
-                const testHi = "नमस्ते! रापिक्योर एआई ऑडियो सिस्टम चालू है।";
-                const testEn = "Hello! RapiCure AI voice system is working properly.";
+                const testHi = "नमस्ते! मैं रापिक्योर एआई हूँ। मेरी आवाज़ अब बिल्कुल साफ़ और नेचुरल है।";
+                const testEn = "Hello! I am RapiCure AI. My voice is now natural, human, and clear.";
                 speechOutputRef.current.speak(
                   selectedLang === "hi-IN" ? testHi : testEn,
                   {
                     lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
                     spokenRomajiFallback:
                       selectedLang === "hi-IN"
-                        ? "Namaste! RapiCure AI audio system chalu hai."
+                        ? "Namaste! Main RapiCure AI hoon. Meri awaaz ab natural aur human hai."
                         : testEn,
                   }
                 );
               }
             }}
             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition-colors active:scale-95"
-            title="Click to test browser speaker voice output"
+            title="Click to test voice speaker output"
           >
             <Volume2 className="w-3 h-3 text-teal-400" />
             <span>Test Sound 🔊</span>

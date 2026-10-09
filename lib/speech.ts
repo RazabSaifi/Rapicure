@@ -218,10 +218,12 @@ export class SpeechInputService {
 }
 
 /**
- * Text to Speech (SpeechSynthesis) Helper for Voice Dialogue and Doctor Audio Briefing
- * Supports authentic Hindi / Indian English voices with robust playback error recovery.
+ * Text to Speech (SpeechSynthesis & Native Audio) Helper
+ * - Tier 1: Plays real, expressive Gemini AI human voice audio (Aoede/Charon/Puck)
+ * - Tier 2: Neural/Natural high-definition browser voices (Microsoft Online Natural / Google)
  */
 export class SpeechOutputService {
+  private currentAudioElement: HTMLAudioElement | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private endTimeout: any = null;
   private voices: SpeechSynthesisVoice[] = [];
@@ -251,64 +253,139 @@ export class SpeechOutputService {
     return this.voices;
   }
 
+  /**
+   * Scores all available voices to pick natural, human neural voices
+   * and completely avoids robotic 90s desktop voices (e.g. Microsoft David Desktop).
+   */
   public findBestVoice(lang: "hi-IN" | "en-IN" | "en-US" | string): {
     voice: SpeechSynthesisVoice | null;
     isNativeHindi: boolean;
   } {
     const allVoices = this.getAvailableVoices();
-    if (lang === "hi-IN") {
-      // 1. Exact or prefix match for Hindi voice
-      const hiVoice = allVoices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith("hi") ||
-          v.name.toLowerCase().includes("hindi") ||
-          v.name.toLowerCase().includes("swara") ||
-          v.name.toLowerCase().includes("madhur") ||
-          v.name.toLowerCase().includes("kavya")
-      );
-      if (hiVoice) {
-        return { voice: hiVoice, isNativeHindi: true };
-      }
+    const isHi = lang.startsWith("hi");
 
-      // 2. Fallback to Indian English (en-IN) voice
-      const indianVoice = allVoices.find(
-        (v) =>
-          v.lang.toLowerCase().includes("en-in") ||
-          v.name.toLowerCase().includes("india") ||
-          v.name.toLowerCase().includes("heera") ||
-          v.name.toLowerCase().includes("ravi") ||
-          v.name.toLowerCase().includes("neerja")
-      );
-      if (indianVoice) {
-        return { voice: indianVoice, isNativeHindi: false };
-      }
-
-      // 3. Fallback to first available voice
-      return { voice: allVoices[0] || null, isNativeHindi: false };
-    } else {
-      // English voice
-      const enInVoice = allVoices.find(
-        (v) =>
-          v.lang.toLowerCase().includes("en-in") ||
-          v.name.toLowerCase().includes("india")
-      );
-      if (enInVoice) return { voice: enInVoice, isNativeHindi: false };
-
-      const enVoice = allVoices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith("en") ||
-          v.name.toLowerCase().includes("natural") ||
-          v.name.toLowerCase().includes("google")
-      );
-      return { voice: enVoice || allVoices[0] || null, isNativeHindi: false };
+    if (allVoices.length === 0) {
+      return { voice: null, isNativeHindi: false };
     }
+
+    const scored = [...allVoices].map((v) => {
+      let score = 0;
+      const name = v.name.toLowerCase();
+      const voiceLang = v.lang.toLowerCase();
+
+      if (isHi) {
+        if (voiceLang.startsWith("hi") || name.includes("hindi")) score += 120;
+        if (voiceLang.includes("in") || name.includes("india")) score += 40;
+      } else {
+        if (voiceLang.includes("en-in") || name.includes("india")) score += 90;
+        if (voiceLang.startsWith("en")) score += 50;
+      }
+
+      // Prioritize modern online neural voices (warm, human, fluid)
+      if (name.includes("natural") || name.includes("online") || name.includes("neural")) score += 60;
+      if (name.includes("google")) score += 45;
+      if (name.includes("swara") || name.includes("madhur") || name.includes("neerja") || name.includes("kavya")) score += 35;
+
+      // Penalize legacy mechanical robot desktop voices
+      if (name.includes("desktop") || name.includes("david") || name.includes("mark")) score -= 80;
+
+      return { voice: v, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0]?.voice || allVoices[0];
+    const isNativeHindi =
+      best.lang.toLowerCase().startsWith("hi") || best.name.toLowerCase().includes("hindi");
+
+    return { voice: best, isNativeHindi };
   }
 
   public isSupported(): boolean {
-    return typeof window !== "undefined" && "speechSynthesis" in window;
+    return typeof window !== "undefined";
   }
 
+  /**
+   * Plays native audio bytes directly from Gemini 2.0 Flash
+   */
+  public playNativeGeminiAudio(
+    audioDataUrl: string,
+    options?: {
+      onStart?: () => void;
+      onEnd?: () => void;
+      onError?: (err: any) => void;
+    }
+  ) {
+    this.stop();
+
+    try {
+      const audio = new Audio(audioDataUrl);
+      this.currentAudioElement = audio;
+
+      audio.onplay = () => {
+        if (options?.onStart) options.onStart();
+      };
+
+      audio.onended = () => {
+        this.currentAudioElement = null;
+        if (options?.onEnd) options.onEnd();
+      };
+
+      audio.onerror = (e) => {
+        console.warn("Native audio play error, falling back to TTS:", e);
+        this.currentAudioElement = null;
+        if (options?.onError) options.onError(e);
+      };
+
+      const promise = audio.play();
+      if (promise !== undefined) {
+        promise.catch((err) => {
+          console.warn("Audio autoplay blocked by browser policy:", err);
+          this.currentAudioElement = null;
+          if (options?.onError) options.onError(err);
+        });
+      }
+    } catch (e) {
+      console.error("Audio constructor error:", e);
+      if (options?.onError) options.onError(e);
+    }
+  }
+
+  /**
+   * Speaks using either Real Gemini Voice Audio (Tier 1) or Natural Neural TTS (Tier 2)
+   */
   public speak(
+    text: string,
+    options?: {
+      rate?: number;
+      pitch?: number;
+      lang?: string;
+      spokenRomajiFallback?: string;
+      audioBase64?: string | null;
+      onStart?: () => void;
+      onEnd?: () => void;
+      onError?: (err: any) => void;
+    }
+  ) {
+    this.stop();
+
+    // 1. TIER 1: Play Real Human Gemini Voice Audio if returned by Gemini 2.0
+    if (options?.audioBase64) {
+      this.playNativeGeminiAudio(options.audioBase64, {
+        onStart: options.onStart,
+        onEnd: options.onEnd,
+        onError: () => {
+          // Fallback to Tier 2 neural voice if audio element playback failed
+          this.speakSynthesis(text, options);
+        },
+      });
+      return;
+    }
+
+    // 2. TIER 2: Neural/Natural Browser Speech Synthesis
+    this.speakSynthesis(text, options);
+  }
+
+  private speakSynthesis(
     text: string,
     options?: {
       rate?: number;
@@ -320,19 +397,15 @@ export class SpeechOutputService {
       onError?: (err: any) => void;
     }
   ) {
-    if (!this.isSupported()) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       if (options?.onEnd) options.onEnd();
       return;
     }
-
-    this.stop();
 
     const win = window as unknown as IWindow;
     const requestedLang = options?.lang || "en-US";
     const { voice, isNativeHindi } = this.findBestVoice(requestedLang);
 
-    // If Hindi is requested but system lacks a native Hindi voice (common on Windows English editions),
-    // use phonetic Romanized Hindi fallback so speech audio plays aloud instead of erroring silently!
     let textToSpeak = text;
     if (requestedLang === "hi-IN" && !isNativeHindi && options?.spokenRomajiFallback) {
       textToSpeak = options.spokenRomajiFallback;
@@ -371,22 +444,19 @@ export class SpeechOutputService {
       if (options?.onError) options.onError(e);
     };
 
-    // Store in global window to prevent Chrome garbage collector bug cancelling long speech
     win._activeUtterance = utterance;
     this.currentUtterance = utterance;
 
-    // Safety fallback timeout in case browser never fires onend
     const wordCount = textToSpeak.split(/\s+/).length;
     const estimatedDuration = Math.max(3000, wordCount * 500 + 1500);
     this.endTimeout = setTimeout(() => {
       if (!hasEnded && window.speechSynthesis.speaking) {
-        console.warn("Speech synthesis timeout safety triggered");
         handleEnd();
       }
     }, estimatedDuration);
 
     try {
-      window.speechSynthesis.resume(); // Ensure speech synthesis queue is not paused
+      window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.error("Speech synthesis speak error:", err);
@@ -395,24 +465,42 @@ export class SpeechOutputService {
   }
 
   public stop() {
+    if (this.currentAudioElement) {
+      try {
+        this.currentAudioElement.pause();
+        this.currentAudioElement.currentTime = 0;
+      } catch (e) {
+        // ignore
+      }
+      this.currentAudioElement = null;
+    }
+
     if (this.endTimeout) {
       clearTimeout(this.endTimeout);
       this.endTimeout = null;
     }
-    if (this.isSupported()) {
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
       } catch (e) {
         // Ignore
       }
       this.currentUtterance = null;
-      if (typeof window !== "undefined") {
-        (window as any)._activeUtterance = null;
-      }
+      (window as any)._activeUtterance = null;
     }
   }
 
   public isSpeaking(): boolean {
-    return this.isSupported() && window.speechSynthesis.speaking;
+    const isAudioPlaying = !!(
+      this.currentAudioElement &&
+      !this.currentAudioElement.paused &&
+      !this.currentAudioElement.ended
+    );
+    const isSynthesisSpeaking =
+      typeof window !== "undefined" &&
+      "speechSynthesis" in window &&
+      window.speechSynthesis.speaking;
+    return isAudioPlaying || isSynthesisSpeaking;
   }
 }

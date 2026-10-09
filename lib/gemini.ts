@@ -12,8 +12,22 @@ export async function converseClinicalIntakeWithGemini(params: {
   patientInput: string;
   patientInfo?: PatientInfo;
   vitals?: VitalsData;
-}): Promise<{ reply: string; spokenRomaji?: string }> {
-  const { apiKey, language, conversationHistory = [], patientInput, patientInfo, vitals } = params;
+  voiceName?: "Aoede" | "Charon" | "Puck" | "Kore" | "Fenrir";
+}): Promise<{
+  reply: string;
+  spokenRomaji?: string;
+  audioBase64?: string | null;
+  voiceMode?: string;
+}> {
+  const {
+    apiKey,
+    language,
+    conversationHistory = [],
+    patientInput,
+    patientInfo,
+    vitals,
+    voiceName = "Aoede",
+  } = params;
 
   try {
     const res = await fetch("/api/gemini/converse", {
@@ -26,6 +40,7 @@ export async function converseClinicalIntakeWithGemini(params: {
         patientInput,
         patientInfo,
         vitals,
+        voiceName,
       }),
     });
 
@@ -41,6 +56,8 @@ export async function converseClinicalIntakeWithGemini(params: {
           ? "मैं समझ गया। कृपया बताएं कि क्या आपको पेट में दर्द या चक्कर भी आ रहे हैं?"
           : "I understand. Are you experiencing any dizziness or severe discomfort?"),
       spokenRomaji: data.spokenRomaji || data.reply,
+      audioBase64: data.audioBase64 || null,
+      voiceMode: data.voiceMode || "neural_tts",
     };
   } catch (error) {
     console.warn("Converse API error, utilizing clinical fallback:", error);
@@ -49,11 +66,15 @@ export async function converseClinicalIntakeWithGemini(params: {
         return {
           reply: "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है?",
           spokenRomaji: "Namaste! Main RapiCure AI hoon. Kripya batayein ki aapko kya takleef ho rahi hai?",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
         };
       }
       return {
         reply: "क्या आपको बुखार या दर्द के साथ चक्कर, उल्टी या सांस लेने में परेशानी महसूस हो रही है?",
         spokenRomaji: "Kya aapko bukhar ya dard ke saath chakkar, ulti ya saans lene mein pareshani mehsoos ho rahi hai?",
+        audioBase64: null,
+        voiceMode: "offline_fallback",
       };
     } else {
       if (conversationHistory.length === 0) {

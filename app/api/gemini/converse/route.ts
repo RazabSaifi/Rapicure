@@ -3,6 +3,39 @@ import { GoogleGenAI } from "@google/genai";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Converts raw 24kHz 16-bit mono PCM into a standard WAV container
+ * with a 44-byte RIFF header playable in all browsers and devices.
+ */
+function pcmToWav(
+  pcmBuffer: Buffer,
+  sampleRate = 24000,
+  numChannels = 1,
+  bitsPerSample = 16
+): Buffer {
+  const header = Buffer.alloc(44);
+  const dataSize = pcmBuffer.length;
+  const fileSize = 36 + dataSize;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(fileSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16); // Subchunk1Size
+  header.writeUInt16LE(1, 20); // PCM format
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
 const FALLBACK_HI = [
   {
     reply:
@@ -66,6 +99,7 @@ export async function POST(req: NextRequest) {
       patientInput = "",
       patientInfo,
       vitals,
+      voiceName = "Aoede", // Prebuilt Gemini human voice persona (Aoede, Charon, Puck, Kore)
       apiKey: clientKey,
     } = body;
 
@@ -83,7 +117,11 @@ export async function POST(req: NextRequest) {
         Math.floor(conversationHistory.length / 2),
         list.length - 1
       );
-      return NextResponse.json(list[turnIdx]);
+      return NextResponse.json({
+        ...list[turnIdx],
+        audioBase64: null,
+        voiceMode: "offline_fallback",
+      });
     }
 
     const ai = new GoogleGenAI({
@@ -136,6 +174,7 @@ LATEST PATIENT INPUT:
 
 Provide your next spoken clinical response in the specified JSON format:`;
 
+    // Step 1: Generate clinical question & dialogue text
     let response;
     try {
       response = await ai.models.generateContent({
@@ -161,18 +200,66 @@ Provide your next spoken clinical response in the specified JSON format:`;
     }
 
     const rawOutput = response.text?.trim() || "";
+    let reply = rawOutput;
+    let spokenRomaji = rawOutput;
     try {
       const parsed = JSON.parse(rawOutput);
-      return NextResponse.json({
-        reply: parsed.reply || rawOutput,
-        spokenRomaji: parsed.spokenRomaji || parsed.reply || rawOutput,
-      });
+      reply = parsed.reply || rawOutput;
+      spokenRomaji = parsed.spokenRomaji || parsed.reply || rawOutput;
     } catch {
-      return NextResponse.json({
-        reply: rawOutput,
-        spokenRomaji: rawOutput,
-      });
+      // ignore
     }
+
+    // Step 2: Generate REAL GEMINI HUMAN VOICE AUDIO via Gemini 2.0 Flash Audio Modality!
+    let audioBase64: string | null = null;
+    try {
+      const textToSpeak = isHindi ? reply : spokenRomaji;
+      const audioPrompt = `Speak this pre-OPD clinical assistant statement naturally with warmth, human empathy, and clear pronunciation: "${textToSpeak}"`;
+
+      const audioGen = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: audioPrompt,
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voiceName || "Aoede",
+              },
+            },
+          },
+        },
+      });
+
+      const candidate = audioGen.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      for (const p of parts) {
+        if (p.inlineData && p.inlineData.data) {
+          const mime = p.inlineData.mimeType || "audio/pcm;rate=24000";
+          if (mime.includes("pcm") || mime.includes("rate=24000")) {
+            // Convert PCM buffer to universal playable WAV
+            const rawPcm = Buffer.from(p.inlineData.data, "base64");
+            const wavBuffer = pcmToWav(rawPcm, 24000);
+            audioBase64 = `data:audio/wav;base64,${wavBuffer.toString("base64")}`;
+          } else {
+            audioBase64 = `data:${mime};base64,${p.inlineData.data}`;
+          }
+          break;
+        }
+      }
+    } catch (audioErr: any) {
+      console.warn(
+        "Gemini 2.0 native audio synthesis notice (client will use high-definition neural fallback):",
+        audioErr?.message
+      );
+    }
+
+    return NextResponse.json({
+      reply,
+      spokenRomaji,
+      audioBase64,
+      voiceMode: audioBase64 ? "gemini_native" : "neural_tts",
+    });
   } catch (error: any) {
     console.error("Server Converse API Error:", error);
     return NextResponse.json({
@@ -180,6 +267,8 @@ Provide your next spoken clinical response in the specified JSON format:`;
         "मैं आपकी बात समझ रहा हूँ। क्या आपको इसके अलावा शरीर में कोई और दर्द या परेशानी है?",
       spokenRomaji:
         "Main aapki baat samajh raha hoon. Kya aapko iske alawa sharir mein koi aur dard ya pareshani hai?",
+      audioBase64: null,
+      voiceMode: "error_fallback",
     });
   }
 }
