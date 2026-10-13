@@ -437,19 +437,34 @@ function getSmartFallbackResponse(
         };
   }
 
-  return isHi
-    ? {
-        reply:
-          "क्या आपने इसके लिए कोई दवा ली है, और क्या पहले भी कभी ऐसी समस्या हुई थी?",
-        spokenRomaji:
-          "Kya aapne iske liye koi dawa li hai, aur kya pehle bhi kabhi aisi samasya hui thi?",
-      }
-    : {
-        reply:
-          "Have you taken any medication for relief, and have you ever had similar symptoms before?",
-        spokenRomaji:
-          "Have you taken any medication for relief, and have you ever had similar symptoms before?",
-      };
+  // Turn 3+ — rotate through unique follow-up questions based on turn
+  const genericFollowUps = isHi
+    ? [
+        { reply: "क्या आपने इसके लिए कोई दवा ली है, जैसे पैरासिटामोल या कोई और दर्दनिवारक?", spokenRomaji: "Kya aapne iske liye koi dawa li hai, jaise paracetamol ya koi aur dard niwarak?" },
+        { reply: "क्या आपको कोई पुरानी बीमारी है जैसे ब्लड प्रेशर, शुगर या दमा?", spokenRomaji: "Kya aapko koi purani bimari hai jaise blood pressure, sugar ya dama?" },
+        { reply: "क्या परिवार में किसी को ऐसी ही समस्या है या हुई है?", spokenRomaji: "Kya parivaar mein kisi ko aisi hi samasya hai ya hui hai?" },
+        { reply: "क्या यह तकलीफ रात को ज्यादा बढ़ती है या हमेशा एक जैसी रहती है?", spokenRomaji: "Kya yeh takleef raat ko zyada badhti hai ya hamesha ek jaisi rehti hai?" },
+        { reply: "क्या आप कोई नियमित दवा ले रहे हैं, जैसे BP की गोली या इंसुलिन?", spokenRomaji: "Kya aap koi niyamit dawa le rahe hain, jaise BP ki goli ya insulin?" },
+        { reply: "क्या आपको कभी अस्पताल में भर्ती होना पड़ा था, और क्या कोई पुराना ऑपरेशन हुआ है?", spokenRomaji: "Kya aapko kabhi hospital mein bharti hona pada tha, aur kya koi purana operation hua hai?" },
+        { reply: "क्या खाने-पीने में कोई बदलाव है, या भूख कम लग रही है?", spokenRomaji: "Kya khane-peene mein koi badlav hai, ya bhookh kam lag rahi hai?" },
+        { reply: "क्या नींद ठीक से आ रही है और थकान या वजन कम होना महसूस हो रहा है?", spokenRomaji: "Kya neend theek se aa rahi hai aur thakaan ya wajan kam hona mehsoos ho raha hai?" },
+        { reply: "ठीक है, क्या इसके अलावा कोई और तकलीफ है जो आप डॉक्टर साहब को बताना चाहते हों?", spokenRomaji: "Theek hai, kya iske alawa koi aur takleef hai jo aap doctor sahab ko batana chahte hon?" },
+      ]
+    : [
+        { reply: "Have you taken any medication for relief, such as paracetamol or a painkiller?", spokenRomaji: "Have you taken any medication for relief, such as paracetamol or a painkiller?" },
+        { reply: "Do you have any pre-existing conditions like hypertension, diabetes, or asthma?", spokenRomaji: "Do you have any pre-existing conditions like hypertension, diabetes, or asthma?" },
+        { reply: "Does any family member have a similar condition or health history?", spokenRomaji: "Does any family member have a similar condition or health history?" },
+        { reply: "Is the discomfort worse at night, or is it constant throughout the day?", spokenRomaji: "Is the discomfort worse at night, or is it constant throughout the day?" },
+        { reply: "Are you currently on any regular medications such as blood pressure pills or insulin?", spokenRomaji: "Are you currently on any regular medications such as blood pressure pills or insulin?" },
+        { reply: "Have you ever been hospitalized or had any surgery in the past?", spokenRomaji: "Have you ever been hospitalized or had any surgery in the past?" },
+        { reply: "Have you noticed any changes in your appetite or significant weight loss recently?", spokenRomaji: "Have you noticed any changes in your appetite or significant weight loss recently?" },
+        { reply: "Are you sleeping well? Do you feel unusually tired or fatigued?", spokenRomaji: "Are you sleeping well? Do you feel unusually tired or fatigued?" },
+        { reply: "Is there anything else you would like to mention before we finalize your clinical notes?", spokenRomaji: "Is there anything else you would like to mention before we finalize your clinical notes?" },
+      ];
+
+  // Pick question by turn index (turn 3 → index 0, turn 4 → index 1, etc.), cycling safely
+  const followUpIndex = Math.min(turn - 3, genericFollowUps.length - 1);
+  return genericFollowUps[followUpIndex];
 }
 
 export async function POST(req: NextRequest) {
