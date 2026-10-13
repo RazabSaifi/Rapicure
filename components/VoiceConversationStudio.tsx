@@ -517,12 +517,65 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
           </button>
         </div>
 
+        {/* PRIMARY ACTION BUTTON: Prominent & Up Top */}
+        <div className="w-full flex flex-col items-center justify-center gap-2 mb-3">
+          {safeHistory.length === 0 ? (
+            <button
+              type="button"
+              onClick={startConversation}
+              className="w-full max-w-md py-4 px-6 rounded-2xl text-base sm:text-lg font-black tracking-wide bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-300 hover:from-teal-300 hover:to-emerald-200 text-slate-950 shadow-xl shadow-teal-500/35 hover:shadow-teal-500/50 transition-all duration-200 transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-3 border border-teal-200/50"
+            >
+              <div className="p-2 rounded-xl bg-slate-950 text-teal-400 shadow-md">
+                <Mic className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <span className="font-extrabold text-slate-950">Start Voice Consultation</span>
+              <span className="text-xs bg-slate-950/20 px-2 py-0.5 rounded-full font-mono text-slate-900 border border-slate-900/10">हिंदी / ENG</span>
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center justify-center gap-2.5 w-full max-w-md">
+              {isListening ? (
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  className="flex-1 py-3 px-4 rounded-xl text-sm font-bold bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <MicOff className="w-5 h-5" />
+                  <span>Pause Mic</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startListening}
+                  className="flex-1 py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Mic className="w-5 h-5 fill-slate-950" />
+                  <span>Tap to Speak Reply</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleFinish}
+                disabled={isLoadingSOAP}
+                className="py-3 px-4 rounded-xl text-sm font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-md transition-all active:scale-95 flex items-center gap-2"
+              >
+                {isLoadingSOAP ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-teal-400" />
+                )}
+                <span>Finish & Generate SOAP</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Glowing Interactive Orb */}
-        <div className="relative flex items-center justify-center my-2">
+        <div className="relative flex items-center justify-center my-1">
           <button
             type="button"
-            onClick={isListening ? stopListening : startListening}
-            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-500 flex items-center justify-center cursor-pointer ${
+            onClick={safeHistory.length === 0 ? startConversation : (isListening ? stopListening : startListening)}
+            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full transition-all duration-500 flex items-center justify-center cursor-pointer ${
               activeStatus === "speaking"
                 ? "bg-gradient-to-tr from-teal-500 via-cyan-400 to-emerald-400 animate-pulse shadow-lg shadow-teal-500/40 scale-110"
                 : activeStatus === "listening"
@@ -531,12 +584,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
                 ? "bg-gradient-to-tr from-purple-500 to-indigo-500 animate-spin shadow-lg shadow-purple-500/30"
                 : "bg-slate-800 hover:bg-slate-750 border border-slate-700 shadow-inner"
             }`}
-            title={isListening ? "Click to pause microphone" : "Click to activate microphone"}
+            title={safeHistory.length === 0 ? "Click to Start Voice Consultation" : (isListening ? "Click to pause microphone" : "Click to activate microphone")}
           >
-            {activeStatus === "speaking" && <Volume2 className="w-8 h-8 text-slate-950 animate-pulse" />}
-            {activeStatus === "listening" && <Mic className="w-8 h-8 text-white animate-pulse" />}
-            {activeStatus === "thinking" && <Sparkles className="w-8 h-8 text-white" />}
-            {activeStatus === "idle" && <Bot className="w-8 h-8 text-teal-400" />}
+            {activeStatus === "speaking" && <Volume2 className="w-7 h-7 text-slate-950 animate-pulse" />}
+            {activeStatus === "listening" && <Mic className="w-7 h-7 text-white animate-pulse" />}
+            {activeStatus === "thinking" && <Sparkles className="w-7 h-7 text-white" />}
+            {activeStatus === "idle" && <Bot className="w-7 h-7 text-teal-400" />}
           </button>
 
           {/* Sound Wave Ripple Effect when active */}
@@ -549,12 +602,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         </div>
 
         {/* Dynamic Status Text */}
-        <div className="mt-2 space-y-0.5">
-          <h4 className="text-sm font-bold text-white tracking-wide">
+        <div className="mt-1 space-y-0.5">
+          <h4 className="text-xs sm:text-sm font-bold text-white tracking-wide">
             {activeStatus === "speaking" && "🤖 RapiCure AI Speaking..."}
             {activeStatus === "listening" && "🎤 Listening to You! Please Speak..."}
             {activeStatus === "thinking" && "🧠 RapiCure AI is Thinking..."}
-            {activeStatus === "idle" && (safeHistory.length === 0 ? "RapiCure Voice Consultation Ready" : "Voice Consultation Active")}
+            {activeStatus === "idle" && (safeHistory.length === 0 ? "Voice Consultation Ready" : "Voice Consultation Active")}
           </h4>
           <p className="text-[11px] text-slate-400">
             {activeStatus === "listening"
@@ -583,56 +636,6 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             )}
           </div>
         )}
-
-        {/* Primary Action Buttons */}
-        <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4">
-          {safeHistory.length === 0 ? (
-            <button
-              type="button"
-              onClick={startConversation}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/25 transition-all active:scale-95 flex items-center gap-2"
-            >
-              <Mic className="w-4 h-4 fill-slate-950" />
-              <span>Start Voice Consultation</span>
-            </button>
-          ) : (
-            <>
-              {isListening ? (
-                <button
-                  type="button"
-                  onClick={stopListening}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/30 transition-all flex items-center gap-1.5 active:scale-95"
-                >
-                  <MicOff className="w-4 h-4" />
-                  <span>Pause Mic</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startListening}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 shadow-lg shadow-teal-500/30 transition-all flex items-center gap-1.5 active:scale-95"
-                >
-                  <Mic className="w-4 h-4" />
-                  <span>Tap to Speak Reply</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={handleFinish}
-                disabled={isLoadingSOAP}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-md transition-all active:scale-95 flex items-center gap-1.5"
-              >
-                {isLoadingSOAP ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
-                )}
-                <span>Finish & Generate SOAP Note</span>
-              </button>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Real-time Dialogue Stream */}
