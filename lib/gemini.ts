@@ -66,8 +66,10 @@ export async function converseClinicalIntakeWithGemini(params: {
     };
   } catch (error) {
     console.warn("Converse API error, utilizing clinical fallback:", error);
+    const turnCount = Math.floor((conversationHistory || []).length / 2);
+
     if (language === "hi-IN") {
-      if (conversationHistory.length === 0) {
+      if (turnCount === 0) {
         return {
           reply: "नमस्ते! मैं रापिक्योर (RapiCure) एआई हूँ। कृपया बताइए कि आपको क्या तकलीफ हो रही है?",
           spokenRomaji: "Namaste! Main RapiCure AI hoon. Kripya batayein ki aapko kya takleef ho rahi hai?",
@@ -75,22 +77,58 @@ export async function converseClinicalIntakeWithGemini(params: {
           voiceMode: "offline_fallback",
         };
       }
+      if (turnCount === 1) {
+        return {
+          reply: "यह तकलीफ कितने दिनों से शुरू हुई है और क्या इसके साथ कमजोरी या चक्कर आ रहे हैं?",
+          spokenRomaji: "Yeh takleef kitne dino se shuru hui hai aur kya iske saath kamzori ya chakkar aa rahe hain?",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
+        };
+      }
+      if (turnCount === 2) {
+        return {
+          reply: "क्या आपने इसके लिए कोई दवा ली है, और क्या दर्द या बुखार में कोई आराम मिला?",
+          spokenRomaji: "Kya aapne iske liye koi dawa li hai, aur kya dard ya bukhar mein koi aaram mila?",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
+        };
+      }
       return {
-        reply: "क्या आपको बुखार या दर्द के साथ चक्कर, उल्टी या सांस लेने में परेशानी महसूस हो रही है?",
-        spokenRomaji: "Kya aapko bukhar ya dard ke saath chakkar, ulti ya saans lene mein pareshani mehsoos ho rahi hai?",
+        reply: "मैंने आपके लक्षण दर्ज कर लिए हैं। कृपया नीचे 'Finish & Generate SOAP Note' बटन दबाकर ओपीडी पर्ची तैयार करें।",
+        spokenRomaji: "Maine aapke lakshan darj kar liye hain. Kripya neeche Finish & Generate SOAP Note button dabakar OPD parchi taiyar karein.",
         audioBase64: null,
         voiceMode: "offline_fallback",
       };
     } else {
-      if (conversationHistory.length === 0) {
+      if (turnCount === 0) {
         return {
           reply: "Hello! I am RapiCure AI. Please describe your symptoms and when they started.",
           spokenRomaji: "Hello! I am RapiCure AI. Please describe your symptoms and when they started.",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
+        };
+      }
+      if (turnCount === 1) {
+        return {
+          reply: "How many days ago did these symptoms begin, and are you feeling dizzy or weak?",
+          spokenRomaji: "How many days ago did these symptoms begin, and are you feeling dizzy or weak?",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
+        };
+      }
+      if (turnCount === 2) {
+        return {
+          reply: "Have you taken any medications for relief, and has the discomfort improved?",
+          spokenRomaji: "Have you taken any medications for relief, and has the discomfort improved?",
+          audioBase64: null,
+          voiceMode: "offline_fallback",
         };
       }
       return {
-        reply: "I understand. Are you experiencing any severe dizziness, vomiting, or difficulty breathing?",
-        spokenRomaji: "I understand. Are you experiencing any severe dizziness, vomiting, or difficulty breathing?",
+        reply: "I have recorded your symptoms. Please click 'Finish & Generate SOAP Note' below to generate your OPD slip.",
+        spokenRomaji: "I have recorded your symptoms. Please click 'Finish & Generate SOAP Note' below to generate your OPD slip.",
+        audioBase64: null,
+        voiceMode: "offline_fallback",
       };
     }
   }

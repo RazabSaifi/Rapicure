@@ -42,6 +42,7 @@ interface IntakeKioskProps {
   onProcessTriage: (overrideNarrative?: string, overrideHistory?: ChatMessage[]) => void;
   isLoading: boolean;
   loadingStepText: string;
+  onOpenApiKeyModal?: () => void;
 }
 
 export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
@@ -60,6 +61,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
   onProcessTriage,
   isLoading,
   loadingStepText,
+  onOpenApiKeyModal,
 }) => {
   const [selectedLang, setSelectedLang] = useState<"hi-IN" | "en-IN">("hi-IN");
   const [intakeMode, setIntakeMode] = useState<"conversational" | "quick">("conversational");
@@ -332,6 +334,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
           onUpdateHistory={onConversationHistoryChange}
           onFinishConsultation={handleFinishFromConversation}
           isLoadingSOAP={isLoading}
+          onOpenApiKeyModal={onOpenApiKeyModal}
         />
       ) : (
         /* Intake Mode 2: Quick Dictation / Manual Text */

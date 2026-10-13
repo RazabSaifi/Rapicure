@@ -18,6 +18,7 @@ import {
   AlertCircle,
   HelpCircle,
   Zap,
+  KeyRound,
 } from "lucide-react";
 import { ChatMessage, PatientInfo, VitalsData } from "@/lib/types";
 import { SpeechInputService, SpeechOutputService, requestMicrophonePermission } from "@/lib/speech";
@@ -33,6 +34,7 @@ interface VoiceConversationStudioProps {
   onUpdateHistory: (history: ChatMessage[]) => void;
   onFinishConsultation: (narrativeText: string) => void;
   isLoadingSOAP: boolean;
+  onOpenApiKeyModal?: () => void;
 }
 
 const QUICK_SYMPTOM_CHIPS_HI = [
@@ -61,6 +63,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   onUpdateHistory,
   onFinishConsultation,
   isLoadingSOAP,
+  onOpenApiKeyModal,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -427,6 +430,54 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         </div>
       )}
 
+      {/* API Key Connection Status & Quick Connect Card */}
+      {!apiKey ? (
+        <div className="p-3.5 bg-gradient-to-r from-amber-950/60 via-slate-900 to-teal-950/50 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+              <Bot className="w-5 h-5 text-amber-400" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white">Gemini API Key Disconnected</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                  Fallback Mode Active
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                Gemini 2.0 Flash live dynamic doctor conversation ke liye apni free Google API Key connect karein.
+              </p>
+            </div>
+          </div>
+          {onOpenApiKeyModal && (
+            <button
+              type="button"
+              onClick={onOpenApiKeyModal}
+              className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 hover:from-teal-300 hover:to-emerald-300 transition-all active:scale-95 flex items-center gap-1.5"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Connect Gemini Key (Free)</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl flex items-center justify-between gap-2 text-xs shadow-md">
+          <div className="flex items-center gap-2 text-emerald-300 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Gemini 2.0 Flash AI Brain Connected & Live</span>
+          </div>
+          {onOpenApiKeyModal && (
+            <button
+              type="button"
+              onClick={onOpenApiKeyModal}
+              className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium underline"
+            >
+              Manage Key
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Visualizer & Status Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 flex flex-col items-center justify-center text-center shadow-2xl">
         {/* Gemini AI Voice Persona Selector */}
@@ -498,6 +549,13 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             </span>
           )}
 
+          {activeVoiceMode === "google_neural_voice" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse">
+              <Sparkles className="w-3 h-3 text-teal-400" />
+              Google Human Neural Voice
+            </span>
+          )}
+
           {activeVoiceMode === "gemini_native" && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse">
               <Sparkles className="w-3 h-3 text-teal-400" />
@@ -519,20 +577,27 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
           <button
             type="button"
-            onClick={() => {
-              if (speechOutputRef.current) {
-                const testHi = "नमस्ते! मैं रापिक्योर एआई हूँ। मेरी आवाज़ अब बिल्कुल साफ़ और नेचुरल है।";
-                const testEn = "Hello! I am RapiCure AI. My voice is now natural, human, and clear.";
-                speechOutputRef.current.speak(
-                  selectedLang === "hi-IN" ? testHi : testEn,
-                  {
-                    lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
-                    spokenRomajiFallback:
-                      selectedLang === "hi-IN"
-                        ? "Namaste! Main RapiCure AI hoon. Meri awaaz ab natural aur human hai."
-                        : testEn,
-                  }
+            onClick={async () => {
+              const testText =
+                selectedLang === "hi-IN"
+                  ? "नमस्ते! मैं रापिक्योर एआई हूँ। मेरी आवाज़ अब बिल्कुल साफ़ और नेचुरल है।"
+                  : "Hello! I am RapiCure AI. My voice is now natural, human, and clear.";
+              try {
+                const res = await fetch(
+                  `https://translate.google.com/translate_tts?ie=UTF-8&tl=${
+                    selectedLang === "hi-IN" ? "hi" : "en"
+                  }&client=tw-ob&q=${encodeURIComponent(testText)}`
                 );
+                const blob = await res.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                const audio = new Audio(audioUrl);
+                audio.play();
+              } catch {
+                if (speechOutputRef.current) {
+                  speechOutputRef.current.speak(testText, {
+                    lang: selectedLang === "hi-IN" ? "hi-IN" : "en-US",
+                  });
+                }
               }
             }}
             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition-colors active:scale-95"

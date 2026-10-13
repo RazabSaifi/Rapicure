@@ -280,6 +280,7 @@ export default function Home() {
               onProcessTriage={handleProcessTriage}
               isLoading={isLoading}
               loadingStepText={loadingStepText}
+              onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             />
           </div>
 

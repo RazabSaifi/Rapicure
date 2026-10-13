@@ -78,6 +78,49 @@ async function generateElevenLabsAudio(
 }
 
 /**
+ * Google Natural Neural Voice Generator (Hindi & English)
+ * Produces real human neural MP3 audio stream for crystal-clear, non-robotic playback.
+ */
+async function generateGoogleNeuralAudio(
+  text: string,
+  lang = "hi"
+): Promise<string | null> {
+  try {
+    const cleanText = text
+      .replace(/[*_#`]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 320);
+
+    if (!cleanText) return null;
+
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(
+      cleanText
+    )}`;
+
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://translate.google.com/",
+      },
+    });
+
+    if (!res.ok) {
+      console.warn("Google Neural TTS returned status:", res.status);
+      return null;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return `data:audio/mpeg;base64,${buffer.toString("base64")}`;
+  } catch (err: any) {
+    console.warn("Google Neural Audio generation error:", err?.message);
+    return null;
+  }
+}
+
+/**
  * Smart organ-specific fallback router when API key is offline or rate-limited
  * Guaranteed NEVER to repeat questions and always progresses through clinical intake.
  */
@@ -410,12 +453,17 @@ function getSmartFallbackResponse(
 }
 
 export async function POST(req: NextRequest) {
+  let language = "hi-IN";
+  let conversationHistory: any[] = [];
+  let patientInput = "";
+
   try {
     const body = await req.json();
+    language = body.language || "hi-IN";
+    conversationHistory = body.conversationHistory || [];
+    patientInput = body.patientInput || "";
+
     const {
-      language = "hi-IN",
-      conversationHistory = [],
-      patientInput = "",
       patientInfo,
       vitals,
       voiceName = "Aoede", // Prebuilt Gemini human voice persona (Aoede, Charon, Puck, Kore)
@@ -442,20 +490,32 @@ export async function POST(req: NextRequest) {
       console.warn("No Gemini API key supplied; utilizing intelligent organ-specific fallback.");
       const smartFallback = getSmartFallbackResponse(patientInput, language, conversationHistory);
 
-      // Check if user has ElevenLabs key for voice even in offline fallback!
+      // Audio Synthesis: Tier 1 ElevenLabs if key available, else Tier 2 Google Neural Audio
       let audioBase64: string | null = null;
+      let voiceMode = "google_neural_voice";
+
       if (elevenLabsApiKey) {
         audioBase64 = await generateElevenLabsAudio(
           smartFallback.reply,
           elevenLabsApiKey
         );
+        if (audioBase64) voiceMode = "elevenlabs_studio";
+      }
+
+      if (!audioBase64) {
+        audioBase64 = await generateGoogleNeuralAudio(
+          smartFallback.reply,
+          isHindi ? "hi" : "en"
+        );
+        if (audioBase64) voiceMode = "google_neural_voice";
       }
 
       return NextResponse.json({
         ...smartFallback,
         audioBase64,
-        voiceMode: audioBase64 ? "elevenlabs_studio" : "offline_fallback",
+        voiceMode: audioBase64 ? voiceMode : "offline_fallback",
         isLiveAI: false,
+        noApiKey: true,
       });
     }
 
@@ -555,9 +615,11 @@ Respond directly to the patient's statement following the clinical protocol (1-2
       // ignore
     }
 
-    // Step 2: Audio Synthesis (Tier 1: ElevenLabs if key available, Tier 2: Gemini 2.0 Native Audio)
+    // Step 2: Audio Synthesis
+    // Tier 1: ElevenLabs Multilingual v2 (if user supplied ElevenLabs key)
+    // Tier 2: Google Natural Neural Voice (clear human MP3 stream, zero robotic sound)
     let audioBase64: string | null = null;
-    let voiceMode = "neural_tts";
+    let voiceMode = "google_neural_voice";
 
     // Try ElevenLabs if configured
     if (elevenLabsApiKey) {
@@ -568,46 +630,13 @@ Respond directly to the patient's statement following the clinical protocol (1-2
       if (audioBase64) voiceMode = "elevenlabs_studio";
     }
 
-    // If ElevenLabs was not used or failed, try Gemini 2.0 Native Audio
+    // High-quality human Google Neural Voice (instant MP3 stream)
     if (!audioBase64) {
-      try {
-        const textToSpeak = isHindi ? reply : spokenRomaji;
-        const audioPrompt = `Speak this pre-OPD clinical assistant statement naturally with warmth, human empathy, and clear pronunciation: "${textToSpeak}"`;
-
-        const audioGen = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: audioPrompt,
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: voiceName || "Aoede",
-                },
-              },
-            },
-          },
-        });
-
-        const candidate = audioGen.candidates?.[0];
-        const parts = candidate?.content?.parts || [];
-        for (const p of parts) {
-          if (p.inlineData && p.inlineData.data) {
-            const mime = p.inlineData.mimeType || "audio/pcm;rate=24000";
-            if (mime.includes("pcm") || mime.includes("rate=24000")) {
-              const rawPcm = Buffer.from(p.inlineData.data, "base64");
-              const wavBuffer = pcmToWav(rawPcm, 24000);
-              audioBase64 = `data:audio/wav;base64,${wavBuffer.toString("base64")}`;
-            } else {
-              audioBase64 = `data:${mime};base64,${p.inlineData.data}`;
-            }
-            voiceMode = "gemini_native";
-            break;
-          }
-        }
-      } catch (audioErr: any) {
-        console.warn("Gemini native audio fallback:", audioErr?.message);
-      }
+      audioBase64 = await generateGoogleNeuralAudio(
+        isHindi ? reply : spokenRomaji,
+        isHindi ? "hi" : "en"
+      );
+      if (audioBase64) voiceMode = "google_neural_voice";
     }
 
     return NextResponse.json({
@@ -619,16 +648,29 @@ Respond directly to the patient's statement following the clinical protocol (1-2
     });
   } catch (error: any) {
     console.error("Server Converse API Error:", error);
+    const isHi = (language || "hi-IN") === "hi-IN";
     const safeFallback = getSmartFallbackResponse(
-      "",
-      "hi-IN",
-      []
+      patientInput || "",
+      language || "hi-IN",
+      conversationHistory || []
     );
+
+    let audioBase64: string | null = null;
+    try {
+      audioBase64 = await generateGoogleNeuralAudio(
+        safeFallback.reply,
+        isHi ? "hi" : "en"
+      );
+    } catch {
+      // ignore
+    }
+
     return NextResponse.json({
       ...safeFallback,
-      audioBase64: null,
-      voiceMode: "error_fallback",
+      audioBase64,
+      voiceMode: audioBase64 ? "google_neural_voice" : "error_fallback",
       isLiveAI: false,
+      apiError: error?.message || "Gemini API connection error",
     });
   }
 }
