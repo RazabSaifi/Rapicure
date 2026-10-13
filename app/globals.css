@@ -34,18 +34,31 @@ body {
   background: #334155;
 }
 
-/* Print Specific Rules */
+/* Print & PDF Export Rules */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
   body {
-    background: white !important;
-    color: black !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   header,
   nav,
   aside,
   button,
+  main,
+  footer,
   .no-print {
     display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
   }
 }

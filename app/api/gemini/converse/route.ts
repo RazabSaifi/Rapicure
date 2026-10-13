@@ -78,184 +78,26 @@ async function generateElevenLabsAudio(
 }
 
 /**
- * Smart organ-specific fallback router when API key is offline
- * Guaranteed NEVER to ask unrelated or dumb questions.
+ * Smart organ-specific fallback router when API key is offline or rate-limited
+ * Guaranteed NEVER to repeat questions and always progresses through clinical intake.
  */
 function getSmartFallbackResponse(
   patientInput: string,
   language: string,
-  turn: number
+  conversationHistory: any[] = []
 ): { reply: string; spokenRomaji: string } {
   const text = (patientInput || "").toLowerCase();
   const isHi = language === "hi-IN";
 
-  // 1. Orthopedic / Injury / Leg / Hand / Fall
-  if (
-    text.includes("पैर") ||
-    text.includes("हाथ") ||
-    text.includes("चोट") ||
-    text.includes("मोच") ||
-    text.includes("हड्डी") ||
-    text.includes("leg") ||
-    text.includes("hand") ||
-    text.includes("foot") ||
-    text.includes("injury") ||
-    text.includes("sprain") ||
-    text.includes("fall") ||
-    text.includes("twist") ||
-    text.includes("दर्द") && (text.includes("घुटने") || text.includes("कमर"))
-  ) {
-    if (turn <= 1) {
-      return isHi
-        ? {
-            reply:
-              "चोट और दर्द के बारे में जानकर दुख हुआ। क्या उस जगह कोई सूजन या नीलापन है, और क्या आप चलने-फिरने में समर्थ हैं?",
-            spokenRomaji:
-              "Chot aur dard ke baare mein jaankar dukh hua. Kya us jagah koi sujan ya neelapan hai, aur kya aap chalne firne mein samarth hain?",
-          }
-        : {
-            reply:
-              "I see you have an injury. Is there any noticeable swelling, redness, or difficulty putting weight on it?",
-            spokenRomaji:
-              "I see you have an injury. Is there any noticeable swelling, redness, or difficulty putting weight on it?",
-          };
-    }
-    return isHi
-      ? {
-          reply:
-            "समझ गया। क्या आपने दर्द के लिए कोई गर्म पट्टी बांधी या कोई दर्दनिवारक दवा ली है? मैं यह जानकारी ओपीडी पर्ची में दर्ज कर रहा हूँ।",
-          spokenRomaji:
-            "Samajh gaya. Kya aapne dard ke liye koi patti baandhi ya koi dawa li hai? Main yeh OPD slip mein darj kar raha hoon.",
-        }
-      : {
-          reply:
-            "Understood. Have you taken any pain reliever or applied ice? I am noting this down for the doctor's consultation.",
-          spokenRomaji:
-            "Understood. Have you taken any pain reliever or applied ice? I am noting this down for the doctor's consultation.",
-        };
-  }
+  // Calculate actual turn progress based on history
+  const patientTurns = conversationHistory.filter((m: any) => m.sender === "patient");
+  const turn = patientTurns.length;
+  const previousAIText = conversationHistory
+    .filter((m: any) => m.sender === "gemini")
+    .map((m: any) => (m.text || "").toLowerCase())
+    .join(" ");
 
-  // 2. Abdominal / Stomach / Vomiting / Diarrhea
-  if (
-    text.includes("पेट") ||
-    text.includes("उल्टी") ||
-    text.includes("दस्त") ||
-    text.includes("stomach") ||
-    text.includes("vomit") ||
-    text.includes("abdomen") ||
-    text.includes("diarrhea") ||
-    text.includes("loose") ||
-    text.includes("गैस")
-  ) {
-    if (turn <= 1) {
-      return isHi
-        ? {
-            reply:
-              "पेट में तकलीफ कब से शुरू हुई, और क्या दर्द पेट के ऊपरी हिस्से में है या नाभि के नीचे?",
-            spokenRomaji:
-              "Pet mein takleef kab se shuru hui, aur kya dard pet ke oopri hisse mein hai ya naabhi ke neeche?",
-          }
-        : {
-            reply:
-              "When did the stomach discomfort begin, and is the pain localized in the upper or lower abdomen?",
-            spokenRomaji:
-              "When did the stomach discomfort begin, and is the pain localized in the upper or lower abdomen?",
-          };
-    }
-    return isHi
-      ? {
-          reply:
-            "क्या आपको उल्टी या जी मिचलाने के साथ दस्त की शिकायत भी हो रही है, और क्या कुछ खाने-पीने पर दर्द बढ़ता है?",
-          spokenRomaji:
-            "Kya aapko ulti ya jee michlane ke saath dast ki shikayat bhi ho rahi hai, aur kya khane par dard badhta hai?",
-        }
-      : {
-          reply:
-            "Are you experiencing any vomiting, diarrhea, or difficulty keeping fluids down?",
-          spokenRomaji:
-            "Are you experiencing any vomiting, diarrhea, or difficulty keeping fluids down?",
-        };
-  }
-
-  // 3. Cough / Cold / Throat / Chest congestion
-  if (
-    text.includes("खांसी") ||
-    text.includes("गला") ||
-    text.includes("cough") ||
-    text.includes("throat") ||
-    text.includes("cold") ||
-    text.includes("जुकाम") ||
-    text.includes("कफ")
-  ) {
-    if (turn <= 1) {
-      return isHi
-        ? {
-            reply:
-              "क्या यह सूखी खांसी है या बलगम आ रहा है, और क्या गले में निगलने पर भी दर्द महसूस हो रहा है?",
-            spokenRomaji:
-              "Kya yeh sukhi khansi hai ya balgam aa raha hai, aur kya gale mein dard mehsoos ho raha hai?",
-          }
-        : {
-            reply:
-              "Is it a dry cough or producing phlegm, and are you having any throat pain while swallowing?",
-            spokenRomaji:
-              "Is it a dry cough or producing phlegm, and are you having any throat pain while swallowing?",
-          };
-    }
-    return isHi
-      ? {
-          reply:
-            "यह खांसी कितने दिनों से है, और क्या इसके साथ रात में हल्का बुखार या सांस लेने में भारीपन महसूस होता है?",
-          spokenRomaji:
-            "Yeh khansi kitne dino se hai, aur kya iske saath raat mein bukhar ya saans lene mein bhareepan lagta hai?",
-        }
-      : {
-          reply:
-            "How many days has this cough lasted, and have you noticed any fever or chest congestion?",
-          spokenRomaji:
-            "How many days has this cough lasted, and have you noticed any fever or chest congestion?",
-        };
-  }
-
-  // 4. Fever / Chills / Dengue / Infection
-  if (
-    text.includes("बुखार") ||
-    text.includes("fever") ||
-    text.includes("temperature") ||
-    text.includes("ताप") ||
-    text.includes("ठंड")
-  ) {
-    if (turn <= 1) {
-      return isHi
-        ? {
-            reply:
-              "बुखार कितने दिनों से आ रहा है, और क्या बुखार के साथ तेज ठंड या कंपकंपी भी महसूस होती है?",
-            spokenRomaji:
-              "Bukhar kitne dino se aa raha hai, aur kya bukhar ke saath tez thand ya kapkapi bhi mehsoos hoti hai?",
-          }
-        : {
-            reply:
-              "How many days have you had the fever, and does it come with severe chills or shivering?",
-            spokenRomaji:
-              "How many days have you had the fever, and does it come with severe chills or shivering?",
-          };
-    }
-    return isHi
-      ? {
-          reply:
-            "क्या सिर में या आँखों के पीछे तेज दर्द है, और क्या शरीर या हाथों पर कोई लाल चकत्ते दिखे हैं?",
-          spokenRomaji:
-            "Kya sir mein ya aankhon ke peeche tez dard hai, aur kya sharir par koi laal chakatte dikhe hain?",
-        }
-      : {
-          reply:
-            "Are you experiencing headache, pain behind the eyes, or any skin rashes?",
-          spokenRomaji:
-            "Are you experiencing headache, pain behind the eyes, or any skin rashes?",
-        };
-  }
-
-  // 5. Default Opening Turn
+  // Turn 0: Opening Greeting
   if (turn === 0 || !patientInput.trim()) {
     return isHi
       ? {
@@ -272,19 +114,298 @@ function getSmartFallbackResponse(
         };
   }
 
-  // 6. Generic Empathetic Turn
+  // Turn 4+: Wrap up consultation
+  if (turn >= 4) {
+    return isHi
+      ? {
+          reply:
+            "मैंने आपके सभी लक्षण और विवरण नोट कर लिए हैं। कृपया नीचे 'Finish & Generate SOAP Note' बटन दबाएं ताकि डॉक्टर साहब के लिए ओपीडी पर्ची तैयार हो सके।",
+          spokenRomaji:
+            "Maine aapke sabhi lakshan aur vivaran note kar liye hain. Kripya neeche Finish & Generate SOAP Note button dabayein taaki doctor sahab ke liye OPD parchi taiyar ho sake.",
+        }
+      : {
+          reply:
+            "I have recorded all your symptoms and medical details. Please click the 'Finish & Generate SOAP Note' button below to generate your clinical OPD slip.",
+          spokenRomaji:
+            "I have recorded all your symptoms and medical details. Please click the 'Finish & Generate SOAP Note' button below to generate your clinical OPD slip.",
+        };
+  }
+
+  // 1. Orthopedic / Injury / Leg / Hand / Fall / Joint
+  if (
+    text.includes("पैर") ||
+    text.includes("हाथ") ||
+    text.includes("चोट") ||
+    text.includes("मोच") ||
+    text.includes("हड्डी") ||
+    text.includes("घुटने") ||
+    text.includes("कमर") ||
+    text.includes("leg") ||
+    text.includes("hand") ||
+    text.includes("foot") ||
+    text.includes("injury") ||
+    text.includes("sprain") ||
+    text.includes("fall") ||
+    text.includes("twist") ||
+    text.includes("joint")
+  ) {
+    if (turn === 1 && !previousAIText.includes("सूजन") && !previousAIText.includes("swelling")) {
+      return isHi
+        ? {
+            reply:
+              "चोट और दर्द के बारे में जानकर दुख हुआ। क्या उस जगह कोई सूजन या नीलापन है, और क्या आप चलने-फिरने में समर्थ हैं?",
+            spokenRomaji:
+              "Chot aur dard ke baare mein jaankar dukh hua. Kya us jagah koi sujan ya neelapan hai, aur kya aap chalne firne mein samarth hain?",
+          }
+        : {
+            reply:
+              "I see you have an injury. Is there any noticeable swelling, redness, or difficulty putting weight on it?",
+            spokenRomaji:
+              "I see you have an injury. Is there any noticeable swelling, redness, or difficulty putting weight on it?",
+          };
+    }
+    if (turn === 2 || !previousAIText.includes("दवा") && !previousAIText.includes("medicine")) {
+      return isHi
+        ? {
+            reply:
+              "समझ गया। क्या आपने दर्द के लिए कोई गर्म पट्टी बांधी या कोई दर्दनिवारक दवा ली है? क्या दर्द लगातार बना हुआ है?",
+            spokenRomaji:
+              "Samajh gaya. Kya aapne dard ke liye koi patti baandhi ya koi dard niwarak dawa li hai? Kya dard lagatar bana hua hai?",
+          }
+        : {
+            reply:
+              "Understood. Have you taken any pain relievers or applied ice? Is the pain constant or throbbing?",
+            spokenRomaji:
+              "Understood. Have you taken any pain relievers or applied ice? Is the pain constant or throbbing?",
+          };
+    }
+    return isHi
+      ? {
+          reply:
+            "ठीक है, मैंने चोट के सारे लक्षण लिख लिए हैं। कृपया नीचे 'Finish' दबाकर ओपीडी पर्ची जनरेट करें।",
+          spokenRomaji:
+            "Theek hai, maine chot ke saare lakshan likh liye hain. Kripya neeche Finish dabakar OPD parchi generate karein.",
+        }
+      : {
+          reply:
+            "Got it. I have noted all details of your injury. Please click 'Finish' below to generate your OPD slip.",
+          spokenRomaji:
+            "Got it. I have noted all details of your injury. Please click 'Finish' below to generate your OPD slip.",
+        };
+  }
+
+  // 2. Abdominal / Stomach / Vomiting / Diarrhea
+  if (
+    text.includes("पेट") ||
+    text.includes("उल्टी") ||
+    text.includes("दस्त") ||
+    text.includes("stomach") ||
+    text.includes("vomit") ||
+    text.includes("abdomen") ||
+    text.includes("diarrhea") ||
+    text.includes("loose") ||
+    text.includes("गैस")
+  ) {
+    if (turn === 1 && !previousAIText.includes("नाभि") && !previousAIText.includes("abdomen")) {
+      return isHi
+        ? {
+            reply:
+              "पेट में तकलीफ कब से शुरू हुई, और क्या दर्द पेट के ऊपरी हिस्से में है या नाभि के नीचे?",
+            spokenRomaji:
+              "Pet mein takleef kab se shuru hui, aur kya dard pet ke oopri hisse mein hai ya naabhi ke neeche?",
+          }
+        : {
+            reply:
+              "When did the stomach discomfort begin, and is the pain localized in the upper or lower abdomen?",
+            spokenRomaji:
+              "When did the stomach discomfort begin, and is the pain localized in the upper or lower abdomen?",
+          };
+    }
+    if (turn === 2 && !previousAIText.includes("उल्टी") && !previousAIText.includes("vomiting")) {
+      return isHi
+        ? {
+            reply:
+              "क्या आपको उल्टी या जी मिचलाने के साथ दस्त की शिकायत भी हो रही है, और क्या कुछ खाने-पीने पर दर्द बढ़ता है?",
+            spokenRomaji:
+              "Kya aapko ulti ya jee michlane ke saath dast ki shikayat bhi ho rahi hai, aur kya khane par dard badhta hai?",
+          }
+        : {
+            reply:
+              "Are you experiencing any vomiting, loose stools, or difficulty keeping fluids down?",
+            spokenRomaji:
+              "Are you experiencing any vomiting, loose stools, or difficulty keeping fluids down?",
+          };
+    }
+    return isHi
+      ? {
+          reply:
+            "क्या आपने इसके लिए कोई दवा या ओआरएस (ORS) घोल लिया है, और क्या कमजोरी महसूस हो रही है?",
+          spokenRomaji:
+            "Kya aapne iske liye koi dawa ya ORS ghol liya hai, aur kya kamzori mehsoos ho rahi hai?",
+        }
+      : {
+          reply:
+            "Have you taken any medicine or hydration fluids, and are you feeling dizzy or weak?",
+          spokenRomaji:
+            "Have you taken any medicine or hydration fluids, and are you feeling dizzy or weak?",
+        };
+  }
+
+  // 3. Cough / Cold / Throat / Chest congestion
+  if (
+    text.includes("खांसी") ||
+    text.includes("गला") ||
+    text.includes("cough") ||
+    text.includes("throat") ||
+    text.includes("cold") ||
+    text.includes("जुकाम") ||
+    text.includes("कफ") ||
+    text.includes("सांस")
+  ) {
+    if (turn === 1 && !previousAIText.includes("बलगम") && !previousAIText.includes("phlegm")) {
+      return isHi
+        ? {
+            reply:
+              "क्या यह सूखी खांसी है या बलगम आ रहा है, और क्या गले में निगलने पर भी दर्द महसूस हो रहा है?",
+            spokenRomaji:
+              "Kya yeh sukhi khansi hai ya balgam aa raha hai, aur kya gale mein dard mehsoos ho raha hai?",
+          }
+        : {
+            reply:
+              "Is it a dry cough or producing phlegm, and are you having any throat pain while swallowing?",
+            spokenRomaji:
+              "Is it a dry cough or producing phlegm, and are you having any throat pain while swallowing?",
+          };
+    }
+    if (turn === 2 && !previousAIText.includes("बुखार") && !previousAIText.includes("fever")) {
+      return isHi
+        ? {
+            reply:
+              "यह खांसी कितने दिनों से है, और क्या इसके साथ रात में हल्का बुखार या सांस लेने में भारीपन महसूस होता है?",
+            spokenRomaji:
+              "Yeh khansi kitne dino se hai, aur kya iske saath raat mein bukhar ya saans lene mein bhareepan lagta hai?",
+          }
+        : {
+            reply:
+              "How many days has this cough lasted, and have you noticed any fever or chest congestion?",
+            spokenRomaji:
+              "How many days has this cough lasted, and have you noticed any fever or chest congestion?",
+          };
+    }
+    return isHi
+      ? {
+          reply:
+            "समझ गया। क्या आपने कोई कफ सिरप या भाप ली है? मैं यह सब डॉक्टर साहब के लिए नोट कर रहा हूँ।",
+          spokenRomaji:
+            "Samajh gaya. Kya aapne koi cough syrup ya bhaap li hai? Main yeh sab doctor sahab ke liye note kar raha hoon.",
+        }
+      : {
+          reply:
+            "Understood. Have you taken any cough syrup or steam inhalation? I am recording this for the physician.",
+          spokenRomaji:
+            "Understood. Have you taken any cough syrup or steam inhalation? I am recording this for the physician.",
+        };
+  }
+
+  // 4. Fever / Chills / Dengue / Infection
+  if (
+    text.includes("बुखार") ||
+    text.includes("fever") ||
+    text.includes("temperature") ||
+    text.includes("ताप") ||
+    text.includes("ठंड") ||
+    text.includes("चक्कर")
+  ) {
+    if (turn === 1 && !previousAIText.includes("ठंड") && !previousAIText.includes("chills")) {
+      return isHi
+        ? {
+            reply:
+              "बुखार कितने दिनों से आ रहा है, और क्या बुखार के साथ तेज ठंड या कंपकंपी भी महसूस होती है?",
+            spokenRomaji:
+              "Bukhar kitne dino se aa raha hai, aur kya bukhar ke saath tez thand ya kapkapi bhi mehsoos hoti hai?",
+          }
+        : {
+            reply:
+              "How many days have you had the fever, and does it come with severe chills or shivering?",
+            spokenRomaji:
+              "How many days have you had the fever, and does it come with severe chills or shivering?",
+          };
+    }
+    if (turn === 2 && !previousAIText.includes("चकत्ते") && !previousAIText.includes("rash")) {
+      return isHi
+        ? {
+            reply:
+              "क्या सिर में या आँखों के पीछे तेज दर्द है, और क्या शरीर या हाथों पर कोई लाल चकत्ते दिखे हैं?",
+            spokenRomaji:
+              "Kya sir mein ya aankhon ke peeche tez dard hai, aur kya sharir par koi laal chakatte dikhe hain?",
+          }
+        : {
+            reply:
+              "Are you experiencing headache, pain behind the eyes, or any skin rashes?",
+            spokenRomaji:
+              "Are you experiencing headache, pain behind the eyes, or any skin rashes?",
+          };
+    }
+    return isHi
+      ? {
+          reply:
+            "क्या आपने पैरासिटामोल या कोई अन्य दवा ली है, और क्या बुखार उतरने पर दोबारा चढ़ जाता है?",
+          spokenRomaji:
+            "Kya aapne paracetamol ya koi anya dawa li hai, aur kya bukhar utarne par dobara chadh jata hai?",
+        }
+      : {
+          reply:
+            "Have you taken paracetamol or any other medication, and does the temperature recur after medication?",
+          spokenRomaji:
+            "Have you taken paracetamol or any other medication, and does the temperature recur after medication?",
+        };
+  }
+
+  // 5. Generic Empathetic Progression
+  if (turn === 1) {
+    return isHi
+      ? {
+          reply:
+            "मैं आपकी बात समझ रहा हूँ। यह तकलीफ कितने दिनों से शुरू हुई है और क्या यह लगातार बनी रहती है?",
+          spokenRomaji:
+            "Main aapki baat samajh raha hoon. Yeh takleef kitne dino se shuru hui hai aur kya yeh lagatar bani rehti hai?",
+        }
+      : {
+          reply:
+            "I understand. How many days ago did this start, and is the discomfort constant?",
+          spokenRomaji:
+            "I understand. How many days ago did this start, and is the discomfort constant?",
+        };
+  }
+
+  if (turn === 2) {
+    return isHi
+      ? {
+          reply:
+            "क्या इस तकलीफ के साथ कमजोरी, चक्कर या उल्टी जैसा महसूस हो रहा है?",
+          spokenRomaji:
+            "Kya is takleef ke saath kamzori, chakkar ya ulti jaisa mehsoos ho raha hai?",
+        }
+      : {
+          reply:
+            "Are you experiencing any accompanying weakness, dizziness, or nausea?",
+          spokenRomaji:
+            "Are you experiencing any accompanying weakness, dizziness, or nausea?",
+        };
+  }
+
   return isHi
     ? {
         reply:
-          "मैं आपकी बात समझ रहा हूँ। क्या यह तकलीफ पिछले 24 घंटों में बढ़ी है, और क्या आपने इसके लिए कोई दवा ली है?",
+          "क्या आपने इसके लिए कोई दवा ली है, और क्या पहले भी कभी ऐसी समस्या हुई थी?",
         spokenRomaji:
-          "Main aapki baat samajh raha hoon. Kya yeh takleef pichle 24 ghante mein badhi hai, aur kya aapne koi dawa li hai?",
+          "Kya aapne iske liye koi dawa li hai, aur kya pehle bhi kabhi aisi samasya hui thi?",
       }
     : {
         reply:
-          "I understand. Have your symptoms worsened recently, and have you taken any medications for relief?",
+          "Have you taken any medication for relief, and have you ever had similar symptoms before?",
         spokenRomaji:
-          "I understand. Have your symptoms worsened recently, and have you taken any medications for relief?",
+          "Have you taken any medication for relief, and have you ever had similar symptoms before?",
       };
 }
 
@@ -315,12 +436,11 @@ export async function POST(req: NextRequest) {
       process.env.ELEVEN_LABS_API_KEY;
 
     const isHindi = language === "hi-IN";
-    const turnCount = Math.floor(conversationHistory.length / 2);
 
     // If no Gemini key is provided, use smart organ-specific fallback
     if (!apiKey) {
       console.warn("No Gemini API key supplied; utilizing intelligent organ-specific fallback.");
-      const smartFallback = getSmartFallbackResponse(patientInput, language, turnCount);
+      const smartFallback = getSmartFallbackResponse(patientInput, language, conversationHistory);
 
       // Check if user has ElevenLabs key for voice even in offline fallback!
       let audioBase64: string | null = null;
@@ -353,20 +473,19 @@ export async function POST(req: NextRequest) {
 You are having an interactive spoken consultation with a patient waiting in the hospital OPD intake queue.
 
 YOUR CLINICAL RESPONSIBILITIES:
-1. ACTIVE LISTENING & DIRECT RELEVANCE (CRITICAL):
+1. STRICT ANTI-REPETITION MANDATE (ABSOLUTE REQUIREMENT):
+   - Thoroughly inspect the "CONVERSATION TRANSCRIPT SO FAR".
+   - NEVER repeat or re-phrase any question that was already asked in any previous turn.
+   - NEVER ask the patient for information they have already provided (e.g., if the patient already stated "4 din se bukhar hai", DO NOT ask "बुखार कितने दिनों से है?").
+   - Progress the consultation logically on every turn:
+     * Turn 1 (Initial complaint): Acknowledge their specific issue with genuine clinical empathy ("जी, मैं समझ गया।"), and ask about the onset or specific nature.
+     * Turn 2 (Focused organ-system inquiry): Ask ONE focused question regarding signs of that specific complaint (e.g. rashes, eye pain, joint swelling, vomiting, chest tightness).
+     * Turn 3 (Severity & prior medications): Ask how severe it is or if they took any medicine (e.g. Paracetamol, painkiller).
+     * Turn 4+ (Wrap up): Reassure the patient and advise them: "मैंने आपके लक्षण और विवरण दर्ज कर लिए हैं। कृपया नीचे 'Finish & Generate SOAP Note' बटन दबाकर डॉक्टर साहब के लिए ओपीडी पर्ची तैयार करें।"
+
+2. ACTIVE LISTENING & DIRECT RELEVANCE (CRITICAL):
    - Listen carefully to what the patient specifically says (e.g., knee sprain, stomach pain, fever, eye injury, skin rash, ear pain, toothache).
    - Your response MUST directly address THAT EXACT complaint. Never ask about unrelated symptoms. (For example, NEVER ask about chest pain or breathlessness if a patient has an ankle twist or eye infection!).
-   
-2. CLINICAL INTAKE PROGRESSION:
-   - Turn 1 (Initial complaint): Acknowledge their specific issue with genuine clinical empathy ("जी, मैं समझ गया।"), and ask about the EXACT onset, mechanism, or nature of that complaint.
-   - Turn 2 (Focused organ-system inquiry): Ask ONE focused question regarding signs of that specific complaint:
-     * If Ortho/Injury: Ask about swelling, joint movement, or weight bearing.
-     * If Abdominal/GI: Ask about pain location (upper/lower), nausea, vomiting, or diarrhea.
-     * If Fever/Infection: Ask about chills, temperature, rash, or headache.
-     * If Respiratory: Ask about dry/wet cough, phlegm, or throat pain.
-     * If ENT/Eye: Ask about vision change, discharge, or ear pain.
-   - Turn 3 (Severity & prior medications): Ask how severe it is (mild/moderate/severe) or if they took any medicine (e.g. Paracetamol, painkiller).
-   - Turn 4+ (Wrap up): Reassure the patient and advise them: "मैंने आपके लक्षण दर्ज कर लिए हैं। कृपया नीचे 'Finish' बटन दबाकर डॉक्टर साहब के लिए ओपीडी पर्ची तैयार करें।"
 
 3. CONVERSATIONAL TONE & LANGUAGE:
    - Spoken Language: ${
@@ -503,7 +622,7 @@ Respond directly to the patient's statement following the clinical protocol (1-2
     const safeFallback = getSmartFallbackResponse(
       "",
       "hi-IN",
-      0
+      []
     );
     return NextResponse.json({
       ...safeFallback,

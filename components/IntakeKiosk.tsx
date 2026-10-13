@@ -39,7 +39,7 @@ interface IntakeKioskProps {
   onConversationHistoryChange: (history: ChatMessage[]) => void;
   labImageBase64: string | null;
   onLabImageChange: (base64: string | null) => void;
-  onProcessTriage: () => void;
+  onProcessTriage: (overrideNarrative?: string, overrideHistory?: ChatMessage[]) => void;
   isLoading: boolean;
   loadingStepText: string;
 }
@@ -143,7 +143,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
 
   const handleFinishFromConversation = (compiledNarrative: string) => {
     onNarrativeChange(compiledNarrative);
-    onProcessTriage();
+    onProcessTriage(compiledNarrative, conversationHistory);
   };
 
   return (
@@ -450,7 +450,7 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
         <div className="pt-2">
           <button
             type="button"
-            onClick={onProcessTriage}
+            onClick={() => onProcessTriage()}
             disabled={isLoading || (!narrativeText && !labImageBase64)}
             className="w-full relative group overflow-hidden rounded-xl p-3.5 font-bold text-slate-950 shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 active:scale-[0.99]"
           >

@@ -175,8 +175,11 @@ export default function Home() {
   };
 
   // Process Triage via Gemini 2.0 Flash
-  const handleProcessTriage = async () => {
-    if (!narrativeText && !labImageBase64 && conversationHistory.length === 0) {
+  const handleProcessTriage = async (overrideNarrative?: string, overrideHistory?: ChatMessage[]) => {
+    const textToAnalyze = overrideNarrative !== undefined ? overrideNarrative : narrativeText;
+    const historyToAnalyze = overrideHistory !== undefined ? overrideHistory : conversationHistory;
+
+    if (!textToAnalyze && !labImageBase64 && historyToAnalyze.length === 0) {
       alert("Please provide patient complaint via AI voice dialogue or attach a lab report.");
       return;
     }
@@ -191,11 +194,11 @@ export default function Home() {
     try {
       const response = await processClinicalTriageWithGemini({
         apiKey,
-        narrativeText,
+        narrativeText: textToAnalyze,
         vitals,
         patientInfo,
         labImageBase64,
-        conversationHistory,
+        conversationHistory: historyToAnalyze,
         useFailsafeFallback: true,
       });
 
@@ -203,8 +206,8 @@ export default function Home() {
         ...response,
         patientInfo,
         vitals,
-        narrativeText,
-        conversationHistory,
+        narrativeText: textToAnalyze,
+        conversationHistory: historyToAnalyze,
         labImagePreview: labImageBase64,
         timestamp: new Date().toISOString(),
       });
@@ -221,7 +224,14 @@ export default function Home() {
 
   const handleTriggerPrint = () => {
     if (typeof window !== "undefined") {
+      const originalTitle = document.title;
+      const patientName = (triageResult?.patientInfo?.name || "Patient").replace(/\s+/g, "_");
+      const token = triageResult?.patientInfo?.tokenNo || "OPD";
+      document.title = `RapiCure_OPD_Report_${token}_${patientName}`;
       window.print();
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
     }
   };
 
@@ -237,7 +247,7 @@ export default function Home() {
       />
 
       {/* Main Dual-Column Split Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 print:hidden">
         {/* Subtle hospital context alert bar */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2 p-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-950/40 via-slate-900/60 to-slate-900/40 border border-teal-500/20 text-xs">
           <div className="flex items-center gap-2 text-teal-300 font-medium">

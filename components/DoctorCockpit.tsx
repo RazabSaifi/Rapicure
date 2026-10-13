@@ -23,6 +23,8 @@ import {
   Sparkles,
   HeartPulse,
   Pill,
+  FileDown,
+  FileText,
 } from "lucide-react";
 
 interface DoctorCockpitProps {
@@ -204,7 +206,7 @@ ${triageResult.plan.map((p, i) => `${i + 1}. ${p}`).join("\n")}
           </div>
         </div>
 
-        {/* Action Buttons: Print & Copy */}
+        {/* Action Buttons: Download PDF, Print & Copy */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -217,13 +219,45 @@ ${triageResult.plan.map((p, i) => `${i + 1}. ${p}`).join("\n")}
           <button
             type="button"
             onClick={onTriggerPrint}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-500 hover:bg-teal-400 text-slate-950 shadow-md transition-all active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 hover:from-teal-300 hover:to-emerald-300 shadow-md shadow-teal-500/20 transition-all active:scale-95"
+            title="Download Clinical Summary PDF / Save as PDF"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>Download PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={onTriggerPrint}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-all active:scale-95"
             title="Print Official OPD Prescription Slip"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print OPD Slip</span>
+            <span className="hidden sm:inline">Print</span>
           </button>
         </div>
+      </div>
+
+      {/* Multimodal Analysis Summary Notice */}
+      <div className="p-3 bg-gradient-to-r from-teal-950/60 via-slate-950 to-slate-950 border border-teal-500/30 rounded-xl flex items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 bg-teal-500/10 rounded-lg border border-teal-500/20 text-teal-400 shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div className="text-xs">
+            <span className="font-bold text-white">Full Multimodal Analysis Synthesized</span>
+            <p className="text-[11px] text-slate-400">
+              Voice Interview + Vital Signs + Attached Lab Image integrated into Clinical SOAP.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onTriggerPrint}
+          className="text-xs font-semibold text-teal-300 hover:text-teal-200 underline decoration-teal-500/50 underline-offset-2 shrink-0 flex items-center gap-1"
+        >
+          <FileDown className="w-3 h-3" />
+          <span>Save PDF</span>
+        </button>
       </div>
 
       {/* Priority Alert Banner */}

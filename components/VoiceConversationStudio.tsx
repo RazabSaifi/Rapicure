@@ -81,8 +81,16 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const silenceTimerRef = useRef<any>(null);
   const latestTranscriptRef = useRef<string>("");
+  const conversationHistoryRef = useRef<ChatMessage[]>(conversationHistory || []);
+  const isThinkingRef = useRef<boolean>(false);
+  const handlePatientMessageRef = useRef<((text: string) => void) | null>(null);
 
-  const safeHistory = conversationHistory || [];
+  // Keep ref synchronized with prop
+  useEffect(() => {
+    conversationHistoryRef.current = conversationHistory || [];
+  }, [conversationHistory]);
+
+  const safeHistory = conversationHistoryRef.current;
 
   useEffect(() => {
     speechInputRef.current = new SpeechInputService();
@@ -115,7 +123,7 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [safeHistory, interimText, isThinking]);
+  }, [conversationHistory, interimText, isThinking]);
 
   // Explicitly trigger the browser's native microphone permission popup
   const handleRequestPermission = async (): Promise<boolean> => {
@@ -141,11 +149,12 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       return;
     }
 
-    if (safeHistory.length > 0) {
+    if (conversationHistoryRef.current.length > 0) {
       startListening();
       return;
     }
 
+    isThinkingRef.current = true;
     setIsThinking(true);
     setActiveStatus("thinking");
 
@@ -176,11 +185,14 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
+      conversationHistoryRef.current = [aiMsg];
       onUpdateHistory([aiMsg]);
+      isThinkingRef.current = false;
       setIsThinking(false);
       speakGeminiResponse(greeting, spokenRomaji, audioBase64, vMode);
     } catch (err: any) {
       console.error(err);
+      isThinkingRef.current = false;
       setIsThinking(false);
       setActiveStatus("idle");
     }
@@ -252,12 +264,14 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
 
         if (isFinal && transcript.trim().length > 2) {
           // Final sentence detected by Web Speech API: trigger immediately!
-          handlePatientMessage(transcript.trim());
+          if (handlePatientMessageRef.current) {
+            handlePatientMessageRef.current(transcript.trim());
+          }
         } else if (transcript.trim().length > 2) {
           // Auto-send after 800ms natural pause (fast and responsive!)
           silenceTimerRef.current = setTimeout(() => {
-            if (latestTranscriptRef.current.trim().length > 2) {
-              handlePatientMessage(latestTranscriptRef.current.trim());
+            if (latestTranscriptRef.current.trim().length > 2 && handlePatientMessageRef.current) {
+              handlePatientMessageRef.current(latestTranscriptRef.current.trim());
             }
           }, 800);
         }
@@ -293,14 +307,18 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
   // Send spoken transcript immediately without waiting for debounce
   const sendSpokenTranscriptNow = () => {
     const textToSend = latestTranscriptRef.current || interimText;
-    if (textToSend.trim()) {
-      handlePatientMessage(textToSend.trim());
+    if (textToSend.trim() && handlePatientMessageRef.current) {
+      handlePatientMessageRef.current(textToSend.trim());
     }
   };
 
   // Process Patient message -> Gemini follow-up question
   const handlePatientMessage = async (patientText: string) => {
-    if (!patientText.trim()) return;
+    if (!patientText.trim() || isThinkingRef.current) return;
+
+    isThinkingRef.current = true;
+    setIsThinking(true);
+    setActiveStatus("thinking");
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (speechInputRef.current) speechInputRef.current.stop();
@@ -312,24 +330,22 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: "patient",
-      text: patientText,
+      text: patientText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    const newHistory = [...safeHistory, userMsg];
-    onUpdateHistory(newHistory);
-
-    // Gemini Thinking & Reply
-    setIsThinking(true);
-    setActiveStatus("thinking");
+    const currentHistory = conversationHistoryRef.current;
+    const historyWithUser = [...currentHistory, userMsg];
+    conversationHistoryRef.current = historyWithUser;
+    onUpdateHistory(historyWithUser);
 
     try {
       const result = await converseClinicalIntakeWithGemini({
         apiKey,
         elevenLabsApiKey,
         language: selectedLang,
-        conversationHistory: newHistory,
-        patientInput: patientText,
+        conversationHistory: historyWithUser,
+        patientInput: patientText.trim(),
         patientInfo,
         vitals,
         voiceName: selectedVoice,
@@ -350,22 +366,33 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
-      onUpdateHistory([...newHistory, aiMsg]);
+      const finalHistory = [...conversationHistoryRef.current, aiMsg];
+      conversationHistoryRef.current = finalHistory;
+      onUpdateHistory(finalHistory);
+
+      isThinkingRef.current = false;
       setIsThinking(false);
       speakGeminiResponse(replyText, spokenRomaji, audioBase64, vMode);
     } catch (e: any) {
       console.error(e);
+      isThinkingRef.current = false;
       setIsThinking(false);
       setActiveStatus("idle");
     }
   };
+
+  // Keep handlePatientMessageRef always pointing to latest instance
+  useEffect(() => {
+    handlePatientMessageRef.current = handlePatientMessage;
+  });
 
   const handleFinish = () => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (speechInputRef.current) speechInputRef.current.stop();
     if (speechOutputRef.current) speechOutputRef.current.stop();
 
-    const compiledNarrative = safeHistory
+    const currentHistory = conversationHistoryRef.current;
+    const compiledNarrative = currentHistory
       .filter((m) => m.sender === "patient")
       .map((m) => m.text)
       .join(". ");

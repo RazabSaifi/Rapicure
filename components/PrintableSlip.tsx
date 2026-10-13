@@ -149,6 +149,53 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({ triageResult }) =>
         </div>
       )}
 
+      {/* Voice Consultation Dialogue Transcript */}
+      {triageResult.conversationHistory && triageResult.conversationHistory.length > 0 && (
+        <div className="mb-4 border border-black p-2.5 text-xs">
+          <div className="flex justify-between items-center border-b border-gray-300 pb-1 mb-1.5">
+            <h2 className="text-[11px] font-black uppercase tracking-wide">
+              AI Voice Consultation Transcript (Hindi/English Pre-OPD Dialogue)
+            </h2>
+            <span className="text-[10px] text-gray-600 font-normal">
+              {triageResult.conversationHistory.length} Dialogue Turns Recorded
+            </span>
+          </div>
+          <div className="space-y-1 pl-1">
+            {triageResult.conversationHistory.map((msg, idx) => (
+              <div key={idx} className="leading-snug">
+                <span className={`font-bold ${msg.sender === "patient" ? "text-gray-900" : "text-gray-700"}`}>
+                  {msg.sender === "patient" ? "Patient: " : "RapiCure AI: "}
+                </span>
+                <span className="text-gray-800">{msg.text}</span>
+                <span className="text-[9px] text-gray-500 ml-1">[{msg.timestamp}]</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Attached Lab Report Findings & Thumbnail */}
+      {triageResult.labImagePreview && (
+        <div className="mb-4 border border-black p-2.5 text-xs flex gap-3 items-start">
+          <div className="w-20 h-20 border border-gray-400 shrink-0 bg-gray-100 flex items-center justify-center overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={triageResult.labImagePreview}
+              alt="Uploaded Lab Report"
+              className="max-h-full max-w-full object-contain"
+            />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-[11px] font-black uppercase tracking-wide border-b border-gray-300 pb-1 mb-1">
+              Attached Diagnostic Lab Report / Document
+            </h2>
+            <p className="text-[11px] text-gray-700 leading-snug">
+              Multimodal vision analysis completed by Gemini 2.0 Flash. Extracted lab parameters, diagnostic values, and abnormal markers are synthesized into the Objective section below.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Structured Clinical SOAP Synthesis */}
       <div className="space-y-3 mb-6">
         <div>
