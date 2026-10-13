@@ -484,32 +484,6 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
             </button>
           )}
 
-          {activeVoiceMode === "elevenlabs_studio" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40 shadow-sm animate-pulse">
-              <Sparkles className="w-3 h-3 text-purple-400" />
-              ElevenLabs Studio Voice
-            </span>
-          )}
-
-          {activeVoiceMode === "google_neural_voice" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse">
-              <Sparkles className="w-3 h-3 text-teal-400" />
-              Google Human Neural Voice
-            </span>
-          )}
-
-          {activeVoiceMode === "gemini_native" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse">
-              <Sparkles className="w-3 h-3 text-teal-400" />
-              Gemini 2.0 Human Voice
-            </span>
-          )}
-
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Gemini 2.0 AI Active
-          </span>
-
           <button
             type="button"
             onClick={async () => {

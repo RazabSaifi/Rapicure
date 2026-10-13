@@ -220,7 +220,6 @@ export default function Home() {
               Voice Clinical Intake (Hindi/English) + Automated Vitals + Multimodal Lab OCR
             </span>
           </div>
-          <span className="text-[11px] text-teal-400 font-mono bg-teal-950/60 px-2 py-0.5 rounded border border-teal-700/40">Backend: Gemini 2.0 Flash Connected</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

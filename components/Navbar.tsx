@@ -102,11 +102,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>New Patient</span>
           </button>
 
-          {/* Backend AI Engine Status Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-teal-500/30 text-teal-300 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="hidden sm:inline">Gemini 2.0 Active</span>
-          </div>
         </div>
       </div>
     </header>
