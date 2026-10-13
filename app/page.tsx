@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { IntakeKiosk } from "@/components/IntakeKiosk";
 import { DoctorCockpit } from "@/components/DoctorCockpit";
 import { PrintableSlip } from "@/components/PrintableSlip";
-import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { PatientInfo, VitalsData, TriageResult, ChatMessage } from "@/lib/types";
 import { DEMO_CASES } from "@/lib/demoData";
 import { processClinicalTriageWithGemini } from "@/lib/gemini";
@@ -29,9 +28,6 @@ const INITIAL_VITALS: VitalsData = {
 };
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState<string>("");
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(INITIAL_PATIENT);
   const [vitals, setVitals] = useState<VitalsData>(INITIAL_VITALS);
   const [narrativeText, setNarrativeText] = useState<string>("");
@@ -42,36 +38,6 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStepText, setLoadingStepText] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Load API Keys from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedKey = localStorage.getItem("rapicure_gemini_api_key");
-      if (savedKey) {
-        setApiKey(savedKey);
-      }
-      const savedEleven = localStorage.getItem("rapicure_elevenlabs_api_key");
-      if (savedEleven) {
-        setElevenLabsApiKey(savedEleven);
-      }
-    }
-  }, []);
-
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("rapicure_gemini_api_key", key);
-    }
-    showToast(key ? "Gemini API key saved for RapiCure!" : "Gemini API key cleared");
-  };
-
-  const handleSaveElevenLabsKey = (key: string) => {
-    setElevenLabsApiKey(key);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("rapicure_elevenlabs_api_key", key);
-    }
-    showToast(key ? "ElevenLabs API key connected for Studio Voice!" : "ElevenLabs key cleared");
-  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -128,7 +94,6 @@ export default function Home() {
 
     try {
       const response = await processClinicalTriageWithGemini({
-        apiKey,
         narrativeText: demo.narrative,
         vitals: demo.vitals,
         patientInfo: demo.patientInfo,
@@ -193,7 +158,6 @@ export default function Home() {
 
     try {
       const response = await processClinicalTriageWithGemini({
-        apiKey,
         narrativeText: textToAnalyze,
         vitals,
         patientInfo,
@@ -215,7 +179,7 @@ export default function Home() {
       showToast(`Triage analysis completed: Priority ${response.priority}`);
     } catch (error: any) {
       console.error("Triage synthesis failed:", error);
-      alert(error.message || "Failed to analyze triage. Please check your Gemini API key.");
+      alert(error.message || "Failed to analyze triage.");
     } finally {
       setIsLoading(false);
       setLoadingStepText("");
@@ -241,32 +205,28 @@ export default function Home() {
       <Navbar
         onLoadDengueDemo={handleLoadDengueDemo}
         onReset={handleReset}
-        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        hasApiKey={!!apiKey || !!elevenLabsApiKey}
         isLoading={isLoading}
       />
 
       {/* Main Dual-Column Split Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 print:hidden">
-        {/* Subtle hospital context alert bar */}
+        {/* Hospital context alert bar */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2 p-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-950/40 via-slate-900/60 to-slate-900/40 border border-teal-500/20 text-xs">
           <div className="flex items-center gap-2 text-teal-300 font-medium">
             <span className="flex h-2 w-2 rounded-full bg-teal-400" />
-            <span>AIIMS Jodhpur Pre-OPD Triage Hub</span>
+            <span>AIIMS Pre-OPD Triage Scribe Hub</span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400">
-              Interactive AI Voice Consultation (Hindi/English) + Vitals + Lab OCR Scribe
+              Voice Clinical Intake (Hindi/English) + Automated Vitals + Multimodal Lab OCR
             </span>
           </div>
-          <span className="text-[11px] text-slate-500 font-mono">Model: gemini-2.0-flash</span>
+          <span className="text-[11px] text-teal-400 font-mono bg-teal-950/60 px-2 py-0.5 rounded border border-teal-700/40">Backend: Gemini 2.0 Flash Connected</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: Intake Kiosk (5/12 cols) */}
           <div className="lg:col-span-6 xl:col-span-5">
             <IntakeKiosk
-              apiKey={apiKey}
-              elevenLabsApiKey={elevenLabsApiKey}
               patientInfo={patientInfo}
               onPatientInfoChange={setPatientInfo}
               vitals={vitals}
@@ -280,7 +240,6 @@ export default function Home() {
               onProcessTriage={handleProcessTriage}
               isLoading={isLoading}
               loadingStepText={loadingStepText}
-              onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             />
           </div>
 
@@ -301,16 +260,6 @@ export default function Home() {
           <strong className="text-teal-400 font-mono">rapicure.ai.studio</strong> • Clinical Pre-OPD Triage Scribe • AAYU 2026 AI Medical Innovation Hackathon (DHR, MoHFW, Google for Developers)
         </p>
       </footer>
-
-      {/* API Key Modal */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        apiKey={apiKey}
-        onSaveKey={handleSaveApiKey}
-        elevenLabsApiKey={elevenLabsApiKey}
-        onSaveElevenLabsKey={handleSaveElevenLabsKey}
-      />
 
       {/* Toast Notification */}
       {toastMessage && (

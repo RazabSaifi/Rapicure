@@ -6,8 +6,6 @@ import { DEMO_CASES } from "./demoData";
  * Uses server-side API proxy route `/api/gemini/converse` with process.env.GEMINI_API_KEY
  */
 export async function converseClinicalIntakeWithGemini(params: {
-  apiKey?: string;
-  elevenLabsApiKey?: string;
   language: "hi-IN" | "en-IN";
   conversationHistory: ChatMessage[];
   patientInput: string;
@@ -22,8 +20,6 @@ export async function converseClinicalIntakeWithGemini(params: {
   isLiveAI?: boolean;
 }> {
   const {
-    apiKey,
-    elevenLabsApiKey,
     language,
     conversationHistory = [],
     patientInput,
@@ -37,8 +33,6 @@ export async function converseClinicalIntakeWithGemini(params: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        apiKey,
-        elevenLabsApiKey,
         language,
         conversationHistory,
         patientInput,
@@ -139,7 +133,6 @@ export async function converseClinicalIntakeWithGemini(params: {
  * Uses server-side API proxy route `/api/gemini/triage` with process.env.GEMINI_API_KEY
  */
 export async function processClinicalTriageWithGemini(params: {
-  apiKey?: string;
   narrativeText: string;
   vitals: VitalsData;
   patientInfo: PatientInfo;
@@ -148,7 +141,6 @@ export async function processClinicalTriageWithGemini(params: {
   useFailsafeFallback?: boolean;
 }): Promise<GeminiSOAPResponse> {
   const {
-    apiKey,
     narrativeText,
     vitals,
     patientInfo,
@@ -164,7 +156,6 @@ export async function processClinicalTriageWithGemini(params: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        apiKey,
         narrativeText,
         vitals,
         patientInfo,

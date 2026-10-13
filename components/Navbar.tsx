@@ -16,16 +16,12 @@ import {
 interface NavbarProps {
   onLoadDengueDemo: () => void;
   onReset: () => void;
-  onOpenApiKeyModal: () => void;
-  hasApiKey: boolean;
   isLoading: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onLoadDengueDemo,
   onReset,
-  onOpenApiKeyModal,
-  hasApiKey,
   isLoading,
 }) => {
   return (
@@ -106,25 +102,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>New Patient</span>
           </button>
 
-          {/* API Key Modal Button */}
-          <button
-            onClick={onOpenApiKeyModal}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-              hasApiKey
-                ? "bg-slate-900 border-teal-500/30 text-teal-300 hover:bg-teal-950/40"
-                : "bg-slate-900 border-amber-500/30 text-amber-300 hover:bg-amber-950/40"
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">
-              {hasApiKey ? "Gemini 2.0 Active" : "Set API Key"}
-            </span>
-            <span
-              className={`w-2 h-2 rounded-full ${
-                hasApiKey ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
-              }`}
-            />
-          </button>
+          {/* Backend AI Engine Status Badge */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-teal-500/30 text-teal-300 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">Gemini 2.0 Active</span>
+          </div>
         </div>
       </div>
     </header>

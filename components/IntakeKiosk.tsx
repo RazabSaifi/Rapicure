@@ -27,8 +27,6 @@ import { PatientInfo, VitalsData, ChatMessage } from "@/lib/types";
 import { COMMON_CHRONIC_CONDITIONS, COMMON_MEDICATIONS } from "@/lib/clinicalOptions";
 
 interface IntakeKioskProps {
-  apiKey: string;
-  elevenLabsApiKey?: string;
   patientInfo: PatientInfo;
   onPatientInfoChange: (info: PatientInfo) => void;
   vitals: VitalsData;
@@ -42,12 +40,9 @@ interface IntakeKioskProps {
   onProcessTriage: (overrideNarrative?: string, overrideHistory?: ChatMessage[]) => void;
   isLoading: boolean;
   loadingStepText: string;
-  onOpenApiKeyModal?: () => void;
 }
 
 export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
-  apiKey,
-  elevenLabsApiKey,
   patientInfo,
   onPatientInfoChange,
   vitals,
@@ -61,7 +56,6 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
   onProcessTriage,
   isLoading,
   loadingStepText,
-  onOpenApiKeyModal,
 }) => {
   const [selectedLang, setSelectedLang] = useState<"hi-IN" | "en-IN">("hi-IN");
   const [intakeMode, setIntakeMode] = useState<"conversational" | "quick">("conversational");
@@ -325,8 +319,6 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
       {/* Intake Mode 1: Conversational AI Voice Studio */}
       {intakeMode === "conversational" ? (
         <VoiceConversationStudio
-          apiKey={apiKey}
-          elevenLabsApiKey={elevenLabsApiKey}
           selectedLang={selectedLang}
           patientInfo={patientInfo}
           vitals={vitals}
@@ -334,7 +326,6 @@ export const IntakeKiosk: React.FC<IntakeKioskProps> = ({
           onUpdateHistory={onConversationHistoryChange}
           onFinishConsultation={handleFinishFromConversation}
           isLoadingSOAP={isLoading}
-          onOpenApiKeyModal={onOpenApiKeyModal}
         />
       ) : (
         /* Intake Mode 2: Quick Dictation / Manual Text */
