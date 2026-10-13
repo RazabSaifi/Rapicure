@@ -218,13 +218,17 @@ export const VoiceConversationStudio: React.FC<VoiceConversationStudioProps> = (
       onEnd: () => {
         setIsSpeaking(false);
         setActiveStatus("idle");
-        // Automatically start listening for patient's reply
-        startListening();
+        // Automatically start listening for patient's reply after slight delay for audio hardware to clear
+        setTimeout(() => {
+          startListening();
+        }, 250);
       },
       onError: () => {
         setIsSpeaking(false);
         setActiveStatus("idle");
-        startListening();
+        setTimeout(() => {
+          startListening();
+        }, 250);
       },
     });
   };

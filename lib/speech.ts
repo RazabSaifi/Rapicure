@@ -55,6 +55,7 @@ export class SpeechInputService {
   private onErrorCallback: ((error: string) => void) | null = null;
   private onEndCallback: (() => void) | null = null;
   private currentLang: "hi-IN" | "en-IN" = "hi-IN";
+  private restartTimeout: any = null;
 
   constructor() {
     this.initRecognition();
@@ -67,6 +68,14 @@ export class SpeechInputService {
 
       if (SpeechRecognitionClass) {
         try {
+          if (this.recognition) {
+            try {
+              this.recognition.abort();
+            } catch {
+              // ignore
+            }
+          }
+
           this.recognition = new SpeechRecognitionClass();
           this.recognition.continuous = true;
           this.recognition.interimResults = true;
@@ -94,8 +103,13 @@ export class SpeechInputService {
 
           this.recognition.onerror = (event: any) => {
             console.warn("Speech recognition error event:", event.error);
-            // Ignore trivial no-speech events when continuous listening
-            if (event.error === "no-speech") {
+            // Ignore benign events when waiting for user speech
+            if (event.error === "no-speech" || event.error === "audio-capture") {
+              return;
+            }
+
+            if (event.error === "aborted") {
+              // Handled gracefully during turn switches
               return;
             }
 
@@ -112,22 +126,34 @@ export class SpeechInputService {
               this.onErrorCallback(userFriendlyError);
             }
             this.isListening = false;
-            this.shouldKeepListening = false;
           };
 
           this.recognition.onend = () => {
-            // If user did not explicitly stop and continuous listening is enabled, auto-restart
+            this.isListening = false;
+
+            // If user did not explicitly stop, auto-restart to keep listening
             if (this.shouldKeepListening) {
-              try {
-                this.recognition.start();
-                this.isListening = true;
-                return;
-              } catch (e) {
-                // Ignore start collision
-              }
+              if (this.restartTimeout) clearTimeout(this.restartTimeout);
+              this.restartTimeout = setTimeout(() => {
+                if (this.shouldKeepListening) {
+                  try {
+                    this.recognition.start();
+                    this.isListening = true;
+                  } catch (e) {
+                    // Retry with clean re-init if state is broken
+                    this.initRecognition();
+                    try {
+                      this.recognition.start();
+                      this.isListening = true;
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }
+              }, 200);
+              return;
             }
 
-            this.isListening = false;
             if (this.onEndCallback) {
               this.onEndCallback();
             }
@@ -156,20 +182,13 @@ export class SpeechInputService {
       return false;
     }
 
-    // First ensure mic permission popup is triggered and granted!
-    const perm = await requestMicrophonePermission();
-    if (!perm.granted) {
-      if (onError) onError(perm.error || "Microphone permission required.");
-      return false;
-    }
-
     this.currentLang = lang;
     this.shouldKeepListening = true;
     this.onResultCallback = onResult;
     this.onErrorCallback = onError || null;
     this.onEndCallback = onEnd || null;
-    this.currentLang = lang;
-    this.shouldKeepListening = true;
+
+    if (this.restartTimeout) clearTimeout(this.restartTimeout);
 
     if (!this.recognition) {
       this.initRecognition();
@@ -182,13 +201,11 @@ export class SpeechInputService {
       return true;
     } catch (e: any) {
       if (e.name === "InvalidStateError") {
-        // Recognition already running, restart safely
+        // Recognition already running or in transition; abort and restart fresh
         try {
-          this.recognition.stop();
-          setTimeout(() => {
-            this.recognition.start();
-            this.isListening = true;
-          }, 150);
+          this.initRecognition();
+          this.recognition.start();
+          this.isListening = true;
           return true;
         } catch (inner) {
           console.warn("Could not restart running recognition:", inner);
@@ -202,9 +219,10 @@ export class SpeechInputService {
 
   public stop() {
     this.shouldKeepListening = false;
-    if (this.recognition && this.isListening) {
+    if (this.restartTimeout) clearTimeout(this.restartTimeout);
+    if (this.recognition) {
       try {
-        this.recognition.stop();
+        this.recognition.abort();
       } catch {
         // ignore
       }

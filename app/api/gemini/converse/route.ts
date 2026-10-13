@@ -157,20 +157,20 @@ function getSmartFallbackResponse(
         };
   }
 
-  // Turn 4+: Wrap up consultation
-  if (turn >= 4) {
+  // Allow deep multi-turn consultation (up to 12 turns before wrapping up)
+  if (turn >= 12) {
     return isHi
       ? {
           reply:
-            "मैंने आपके सभी लक्षण और विवरण नोट कर लिए हैं। कृपया नीचे 'Finish & Generate SOAP Note' बटन दबाएं ताकि डॉक्टर साहब के लिए ओपीडी पर्ची तैयार हो सके।",
+            "मैंने आपके सभी लक्षण और विवरण नोट कर लिए हैं। क्या इसके अलावा कोई और तकलीफ है, या मैं ओपीडी पर्ची तैयार करूँ?",
           spokenRomaji:
-            "Maine aapke sabhi lakshan aur vivaran note kar liye hain. Kripya neeche Finish & Generate SOAP Note button dabayein taaki doctor sahab ke liye OPD parchi taiyar ho sake.",
+            "Maine aapke sabhi lakshan aur vivaran note kar liye hain. Kya iske alawa koi aur takleef hai, ya main OPD parchi taiyar karoon?",
         }
       : {
           reply:
-            "I have recorded all your symptoms and medical details. Please click the 'Finish & Generate SOAP Note' button below to generate your clinical OPD slip.",
+            "I have noted your detailed history. Is there anything else you would like to mention before we finalize your slip?",
           spokenRomaji:
-            "I have recorded all your symptoms and medical details. Please click the 'Finish & Generate SOAP Note' button below to generate your clinical OPD slip.",
+            "I have noted your detailed history. Is there anything else you would like to mention before we finalize your slip?",
         };
   }
 
@@ -539,9 +539,9 @@ YOUR CLINICAL RESPONSIBILITIES:
    - NEVER ask the patient for information they have already provided (e.g., if the patient already stated "4 din se bukhar hai", DO NOT ask "बुखार कितने दिनों से है?").
    - Progress the consultation logically on every turn:
      * Turn 1 (Initial complaint): Acknowledge their specific issue with genuine clinical empathy ("जी, मैं समझ गया।"), and ask about the onset or specific nature.
-     * Turn 2 (Focused organ-system inquiry): Ask ONE focused question regarding signs of that specific complaint (e.g. rashes, eye pain, joint swelling, vomiting, chest tightness).
+     * Turn 2 (Focused inquiry): Ask ONE focused question regarding signs of that specific complaint (e.g. rashes, eye pain, joint swelling, vomiting, chest tightness).
      * Turn 3 (Severity & prior medications): Ask how severe it is or if they took any medicine (e.g. Paracetamol, painkiller).
-     * Turn 4+ (Wrap up): Reassure the patient and advise them: "मैंने आपके लक्षण और विवरण दर्ज कर लिए हैं। कृपया नीचे 'Finish & Generate SOAP Note' बटन दबाकर डॉक्टर साहब के लिए ओपीडी पर्ची तैयार करें।"
+     * Turn 4+ (Detailed follow-up): Continue exploring any additional symptoms, associated problems, or chronicity. Only when all clinical aspects are covered, ask if there is anything else they wish to share. Always keep accepting patient inputs until they decide to finish.
 
 2. ACTIVE LISTENING & DIRECT RELEVANCE (CRITICAL):
    - Listen carefully to what the patient specifically says (e.g., knee sprain, stomach pain, fever, eye injury, skin rash, ear pain, toothache).
